@@ -106,6 +106,7 @@
 
 /*** Mac Cocoa headers ***/
 #elif defined(TOGL_NSOPENGL)
+#  undef panic  /* Tcl/Tk panic macro conflicts with Mac macro of the same name, redefine later */
 #  include <OpenGL/OpenGL.h>
 #  include <AppKit/NSOpenGL.h>	/* Use NSOpenGLContext */
 #  include <AppKit/NSView.h>	/* Use NSView */
@@ -127,6 +128,7 @@
 - (NSRect)convertRectToBacking:(NSRect)aRect;
 #define NSEventPhaseNone 0
 @end
+#define panic Tcl_Panic  /* redefine Tcl/Tk panic macro, as per the above */
 #  endif
 
 #else /* make sure only one platform defined */

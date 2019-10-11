@@ -95,7 +95,7 @@
 #    include <autostereo.h>
 #  endif
 
-/*** Mac headers ***/
+/*** Mac Carbon headers ***/
 #elif defined(TOGL_AGL)
 #  define Cursor QDCursor
 #  include <AGL/agl.h>
@@ -103,6 +103,31 @@
 #  include <tkMacOSXInt.h>      /* usa MacDrawable */
 #  include <ApplicationServices/ApplicationServices.h>
 #  define Togl_MacOSXGetDrawablePort(togl) TkMacOSXGetDrawablePort((Drawable) ((TkWindow *) togl->TkWin)->privatePtr)
+
+/*** Mac Cocoa headers ***/
+#elif defined(TOGL_NSOPENGL)
+#  include <OpenGL/OpenGL.h>
+#  include <AppKit/NSOpenGL.h>	/* Use NSOpenGLContext */
+#  include <AppKit/NSView.h>	/* Use NSView */
+#  include <AppKit/NSWindow.h>	/* Use NSWindow */
+#  include <AppKit/NSOpenGLView.h>	/* Use NSView setWantsBestResolutionOpenGLSurface */
+#  include <AppKit/NSEvent.h>	/* Use NSEvent */
+#  include <AppKit/NSTouch.h>	/* Use NSTouch */
+#  include <Foundation/Foundation.h>	/* Use NSRect */
+#  include <tkMacOSXInt.h>      /* Use MacDrawable */
+#  include <ApplicationServices/ApplicationServices.h>
+#  define Togl_MacOSXGetDrawablePort(togl) TkMacOSXGetDrawablePort((Drawable) ((TkWindow *) togl->TkWin)->privatePtr)
+
+#  include <Availability.h>
+#  ifndef __MAC_10_7
+/* Define Mac retina display routines not available prior to Mac OS 10.7 */
+@interface NSView (NSOpenGLSurfaceResolution)
+- (BOOL)wantsBestResolutionOpenGLSurface;
+- (void)setWantsBestResolutionOpenGLSurface:(BOOL)flag;
+- (NSRect)convertRectToBacking:(NSRect)aRect;
+#define NSEventPhaseNone 0
+@end
+#  endif
 
 #else /* make sure only one platform defined */
 #  error Unsupported platform, or confused platform defines...
@@ -141,6 +166,12 @@
 #    error Sorry Mac Aqua version requires Tcl/Tk ver 8.4.0 or higher.
 #  endif
 #endif /* TOGL_AGL */
+
+#if defined(TOGL_NSOPENGL)
+#  if TK_MAJOR_VERSION < 8 || (TK_MAJOR_VERSION == 8 && TK_MINOR_VERSION < 6)
+#    error Sorry Mac Cocoa version requires Tcl/Tk ver 8.6.0 or higher.
+#  endif
+#endif /* TOGL_NSOPENGL */
 
 #if defined(TOGL_WGL) && defined(_MSC_VER)
 #  define snprintf _snprintf
@@ -307,6 +338,27 @@ typedef struct Togl_PackageGlobals Togl_PackageGlobals;
 
 extern ToglStubs toglStubs;     /* should be only non-const global */
 
+#if defined(TOGL_NSOPENGL)
+
+/* Handle window drags between retina and non-retina displays. */
+@interface ToglNSView : NSView {
+    struct Togl *togl;
+}
+- (void) setTogl: (struct Togl*)t;
+- (void) viewDidChangeBackingProperties;
+- (void) magnifyWithEvent: (NSEvent *)event;
+- (void) rotateWithEvent: (NSEvent *)event;
+- (void) scrollWheel: (NSEvent *)event;
+- (void)touchesBeganWithEvent:(NSEvent *)event;
+- (void)touchesMovedWithEvent:(NSEvent *)event;
+- (void)touchesEndedWithEvent:(NSEvent *)event;
+- (void)touchesCancelledWithEvent:(NSEvent *)event;
+- (void)reportEventTouches:(NSEvent *)event;
+
+@end
+
+#endif
+
 struct Togl
 {
     Togl   *Next;               /* next in linked list */
@@ -321,6 +373,9 @@ struct Togl
     GLXContext Ctx;             /* Normal planes GLX context */
 #elif defined(TOGL_AGL)
     AGLContext Ctx;
+#elif defined(TOGL_NSOPENGL)
+    NSOpenGLContext *Ctx;
+    ToglNSView *nsview;
 #endif
     int     contextTag;         /* all contexts with same tag share display
                                  * lists */
@@ -336,6 +391,9 @@ struct Togl
     Tk_Cursor Cursor;           /* The widget's cursor */
 #endif
     int     Width, Height;      /* Dimensions of window */
+    int     PixelScale;         /* Graphics pixels per Tk pixel. */
+                                /*    1 for normal display. */
+                                /*    2 for Mac retina display. */
     int     SetGrid;            /* positive is grid size for window manager */
     int     TimerInterval;      /* Time interval for timer in milliseconds */
     Tcl_TimerToken timerHandler;        /* Token for togl's timer handler */
@@ -363,7 +421,11 @@ struct Togl
     GLuint  riStencilBit;       /* row interleaved stencil bit */
     int     AuxNumber;
     Bool    Indirect;
+#if defined(TOGL_NSOPENGL)
+    NSOpenGLPixelFormat *PixelFormat;
+#else
     Tcl_WideInt PixelFormat;
+#endif
     int     SwapInterval;
     Bool    MultisampleFlag;
     Bool    FullscreenFlag;
@@ -377,6 +439,8 @@ struct Togl
     int     pbufferLost;
 #elif defined(TOGL_AGL)
     AGLPbuffer pbuf;
+#elif defined(TOGL_NSOPENGL)
+    NSOpenGLPixelBuffer *pbuf;
 #endif
     const char *ShareList;      /* name (ident) of Togl to share dlists with */
     const char *ShareContext;   /* name (ident) to share OpenGL context with */
@@ -391,6 +455,11 @@ struct Togl
     Tcl_Obj *ReshapeProc;       /* Callback when window size changes */
     Tcl_Obj *DestroyProc;       /* Callback when widget is destroyed */
     Tcl_Obj *TimerProc;         /* Callback when widget is idle */
+    Tcl_Obj *MagnifyProc;       /* Callback for track pad pinch gesture */
+    Tcl_Obj *RotateProc;        /* Callback for track pad rotate gesture */
+    Tcl_Obj *ScrollProc;        /* Callback for track pad scroll gesture */
+    Tcl_Obj *ScrollWheelProc;   /* Callback for mouse scroll wheel, not trackpad */
+    Tcl_Obj *TouchesProc;       /* Callback for track pad touches */
 
     /* Overlay stuff */
 #if defined(TOGL_X11)
@@ -419,6 +488,103 @@ struct Togl
                                  * create a dummy window */
 };
 
+int Togl_CallCallback(Togl *togl, Tcl_Obj *cmd);
+static int Togl_CallCallback_P(Togl *togl, Tcl_Obj *cmd, double *params, int nparams);
+static int viewPixelScale(NSView *nsview);
+
+#if defined(TOGL_NSOPENGL)
+
+@implementation ToglNSView
+
+- (void) setTogl: (struct Togl*)t
+{
+    togl = t;
+}
+
+- (void) viewDidChangeBackingProperties
+{
+    [super viewDidChangeBackingProperties];
+    if (togl && togl->ReshapeProc) {
+      int pscale = viewPixelScale(self);
+      if (pscale != togl->PixelScale) {
+	togl->PixelScale = pscale;
+	if (togl->ReshapeProc)
+	  (void) Togl_CallCallback(togl, togl->ReshapeProc);
+	Togl_PostRedisplay(togl);
+      }
+    }
+}
+
+- (void) magnifyWithEvent: (NSEvent *)event
+{
+  if (togl && togl->MagnifyProc) {
+    double mag = [event magnification] + 1.0;
+    (void) Togl_CallCallback_P(togl, togl->MagnifyProc, &mag, 1);
+  }
+}
+
+- (void) rotateWithEvent: (NSEvent *)event
+{
+  if (togl && togl->RotateProc) {
+    double deg = [event rotation];
+    (void) Togl_CallCallback_P(togl, togl->RotateProc, &deg, 1);
+  }
+}
+
+- (void) scrollWheel: (NSEvent *)event
+{
+  if (togl && (togl->ScrollProc || togl->ScrollWheelProc)) {
+    float dx = [event deltaX], dy = [event deltaY];
+    if (dx != 0 || dy != 0) {
+      //      float track_pad = ((([event phase] == NSEventPhaseNone) &&
+      //			  ([event momentumPhase] == NSEventPhaseNone)) ? 0 : 1);
+      float track_pad = ([event subtype] == NSMouseEventSubtype ? 0 : 1);
+      double args[3] = {dx, dy, track_pad};
+      if (togl->ScrollProc)
+	(void) Togl_CallCallback_P(togl, togl->ScrollProc, args, 3);
+      if (togl->ScrollWheelProc && !track_pad)
+	(void) Togl_CallCallback_P(togl, togl->ScrollWheelProc, args+1, 1);
+    }
+  }
+}
+
+- (void)touchesBeganWithEvent:(NSEvent *)event
+{  NSWindow *win = [self window];
+  [win makeKeyWindow];
+  // [win makeMainWindow];
+  [self reportEventTouches:event];
+ }
+- (void)touchesMovedWithEvent:(NSEvent *)event
+{ [self reportEventTouches:event]; }
+- (void)touchesEndedWithEvent:(NSEvent *)event
+{ [self reportEventTouches:event]; }
+- (void)touchesCancelledWithEvent:(NSEvent *)event;
+{ [self reportEventTouches:event]; }
+- (void)reportEventTouches: (NSEvent *)event
+{
+  if (togl && togl->TouchesProc) {
+    NSSet *touches = [event touchesMatchingPhase:NSTouchPhaseTouching inView:self];
+    int n = touches.count, i;
+    double *id_xy = NULL;
+    if (n >= 0) {
+      id_xy = (double *)malloc(3*n*sizeof(double));
+      NSArray *array = [touches allObjects];
+      for (i = 0 ; i < n ; ++i) {
+	NSTouch *t = [array objectAtIndex:i];
+	id_xy[3*i] = (long)t.identity;
+	id_xy[3*i+1] = t.normalizedPosition.x * t.deviceSize.width;
+	id_xy[3*i+2] = t.normalizedPosition.y * t.deviceSize.height;
+      }
+      (void) Togl_CallCallback_P(togl, togl->TouchesProc, id_xy, 3*n);
+      if (id_xy)
+	free(id_xy);
+    }
+  }
+}
+
+@end
+
+#endif
 
 /* 
  * Prototypes for functions local to this file
@@ -430,6 +596,7 @@ static void Togl_EventProc(ClientData clientData, XEvent *eventPtr);
 static void Togl_RedisplayProc(ClientData clientData, XEvent *eventPtr);
 static Window Togl_MakeWindow(Tk_Window, Window, ClientData);
 static void Togl_WorldChanged(ClientData);
+static void Togl_SetViewPort(const struct Togl *);
 
 #ifdef MESA_COLOR_HACK
 static int get_free_color_cells(Display *display, int screen,
@@ -438,7 +605,7 @@ static void free_default_color_cells(Display *display, Colormap colormap);
 #endif
 static void ToglCmdDeletedProc(ClientData);
 
-#if defined(TOGL_AGL)
+#if defined(TOGL_AGL) || defined(TOGL_NSOPENGL)
 static void SetMacBufRect(Togl *togl);
 #endif
 
@@ -446,6 +613,8 @@ static void SetMacBufRect(Togl *togl);
 #  include "toglWGL.c"
 #elif defined(TOGL_AGL)
 #  include "toglAGL.c"
+#elif defined(TOGL_NSOPENGL)
+#  include "toglNSOpenGL.c"
 #elif defined(TOGL_X11)
 #  include "toglGLX.c"
 #endif
@@ -471,6 +640,8 @@ static Tk_OptionSpec optionSpecs[] = {
     {TK_OPTION_PIXELS, TCL_STUPID "-width", "width", "Width",
                 DEFAULT_WIDTH, -1, Tk_Offset(Togl, Width), 0, NULL,
             GEOMETRY_MASK},
+    {TK_OPTION_INT, TCL_STUPID "-pixelscale", "pixelscale", "PixelScale",
+            "1", -1, Tk_Offset(Togl, PixelScale), 0, NULL, FORMAT_MASK},
     {TK_OPTION_BOOLEAN, TCL_STUPID "-rgba", "rgba", "Rgba",
             "true", -1, Tk_Offset(Togl, RgbaFlag), 0, NULL, FORMAT_MASK},
     {TK_OPTION_INT, TCL_STUPID "-redsize", "redsize", "RedSize",
@@ -589,6 +760,22 @@ static Tk_OptionSpec optionSpecs[] = {
             TK_OPTION_NULL_OK, NULL, OVERLAY_MASK},
     {TK_OPTION_SYNONYM, TCL_STUPID "-overlaydisplay", NULL, NULL,
             NULL, -1, -1, 0, (ClientData) "-overlaydisplaycommand", 0},
+    {TK_OPTION_STRING, TCL_STUPID "-magnifycommand", "magnifyCommand",
+                "CallbackCommand", NULL,
+            Tk_Offset(Togl, MagnifyProc), -1, TK_OPTION_NULL_OK, NULL, 0},
+    {TK_OPTION_STRING, TCL_STUPID "-rotatecommand", "rotateCommand",
+                "CallbackCommand", NULL,
+            Tk_Offset(Togl, RotateProc), -1, TK_OPTION_NULL_OK, NULL, 0},
+    {TK_OPTION_STRING, TCL_STUPID "-scrollcommand", "scrollCommand",
+                "CallbackCommand", NULL,
+            Tk_Offset(Togl, ScrollProc), -1, TK_OPTION_NULL_OK, NULL, 0},
+    {TK_OPTION_STRING, TCL_STUPID "-scrollwheelcommand", "scrollWheelCommand",
+                "CallbackCommand", NULL,
+            Tk_Offset(Togl, ScrollWheelProc), -1, TK_OPTION_NULL_OK, NULL, 0},
+    {TK_OPTION_STRING, TCL_STUPID "-touchescommand", "touchesCommand",
+                "CallbackCommand", NULL,
+            Tk_Offset(Togl, TouchesProc), -1, TK_OPTION_NULL_OK, NULL, 0},
+
     /* Tcl3D backwards compatibility */
     {TK_OPTION_SYNONYM, TCL_STUPID "-createproc", NULL, NULL,
             NULL, -1, -1, 0, (ClientData) "-createcommand", 0},
@@ -1072,6 +1259,33 @@ Togl_CallCallback(Togl *togl, Tcl_Obj *cmd)
     return result;
 }
 
+static int
+Togl_CallCallback_P(Togl *togl, Tcl_Obj *cmd, double *params, int nparams)
+{
+    int     result, i;
+    Tcl_Obj **objv = (Tcl_Obj **)malloc((3+nparams)*sizeof(Tcl_Obj *));
+
+    if (cmd == NULL || togl->widgetCmd == NULL)
+        return TCL_OK;
+
+    objv[0] = cmd;
+    Tcl_IncrRefCount(objv[0]);
+    objv[1] = Tcl_NewStringObj(Tcl_GetCommandName(togl->Interp, togl->widgetCmd), -1);
+    Tcl_IncrRefCount(objv[1]);
+    for (i = 0 ; i < nparams ; ++i) {
+      objv[2+i] = Tcl_NewDoubleObj(params[i]);
+      Tcl_IncrRefCount(objv[2+i]);
+    }
+    objv[2+nparams] = NULL;
+    result = Tcl_EvalObjv(togl->Interp, 2+nparams, objv, TCL_EVAL_GLOBAL);
+    for (i = 1+nparams ; i >= 0 ; --i)
+      Tcl_DecrRefCount(objv[i]);
+    free(objv);
+    if (result != TCL_OK)
+        Tcl_BackgroundError(togl->Interp);
+    return result;
+}
+
 
 /* 
  * Togl_Timer
@@ -1167,6 +1381,19 @@ Togl_MakeCurrent(const Togl *togl)
                 GLint   virtualScreen = aglGetVirtualScreen(togl->Ctx);
 
                 aglSetPBuffer(togl->Ctx, togl->pbuf, 0, 0, virtualScreen);
+            }
+        }
+    }
+#elif defined(TOGL_NSOPENGL)
+    if (togl != NULL && togl->Ctx != NULL) {
+        [togl->Ctx makeCurrentContext];
+        if (FindToglWithSameContext(togl) != NULL) {
+            if (!togl->PbufferFlag) {
+	        [togl->Ctx setView:togl->nsview];
+            } else {
+	        GLint   virtualScreen =	[togl->Ctx currentVirtualScreen];
+                [togl->Ctx setPixelBuffer:togl->pbuf cubeMapFace:0
+		 mipMapLevel:0 currentVirtualScreen:virtualScreen];
             }
         }
     }
@@ -1289,6 +1516,11 @@ Togl_SwapInterval(const Togl *togl, int interval)
 
     return aglSetInteger(togl->Ctx, AGL_SWAP_INTERVAL, &swapInterval);
 #endif
+#ifdef TOGL_NSOPENGL
+    GLint   swapInterval = interval;
+    [togl->Ctx setValues:&swapInterval forParameter:NSOpenGLCPSwapInterval];
+    return True;
+#endif
 #ifdef TOGL_WGL
     typedef BOOL (WINAPI *BOOLFuncInt) (int);
     typedef const char *(WINAPI *StrFuncHDC) (HDC);
@@ -1385,7 +1617,63 @@ ReconfigureCB(CGDirectDisplayID display, CGDisplayChangeSummaryFlags flags,
         if (togl->ReshapeProc) {
             Togl_CallCallback(togl, togl->ReshapeProc);
         } else {
-            glViewport(0, 0, togl->Width, togl->Height);
+	    Togl_SetViewPort(togl);
+        }
+    }
+}
+#endif
+
+#if defined(TOGL_NSOPENGL)
+/*
+TODO: It appears that Tk only makes an NSView for toplevel windows.
+Also it looks like NSOpenGL does not have the equivalent of AGL_BUFFER_RECT
+that allows opengl drawing to just part of an NSView.  So we might need to
+create our own NSView for controlling the opengl bounds.
+Look at TkMacOSXMakeRealWindowExist() in tkMacOSXWm.c.
+*/
+
+/* tell OpenGL which part of the Mac window to render to */
+static void
+SetMacBufRect(Togl *togl)
+{
+    Rect r, rt;
+    NSRect    rect;
+    TkWindow *w = (TkWindow *) togl->TkWin;
+    TkWindow *t = w->privatePtr->toplevel->winPtr;
+
+    TkMacOSXWinBounds(w, &r);
+    TkMacOSXWinBounds(t, &rt);
+
+    rect.origin.x = r.left - rt.left;
+    rect.origin.y = rt.bottom - r.bottom;
+    rect.size.width = r.right - r.left;
+    rect.size.height = r.bottom - r.top;
+
+    [togl->nsview setFrame:rect];
+    [togl->Ctx update];
+    
+    /* TODO: Support full screen. */
+}
+
+static void
+ReconfigureCB(CGDirectDisplayID display, CGDisplayChangeSummaryFlags flags,
+        void *closure)
+{
+    /* Display reconfiguration callback. Documented as needed by Apple QA1209.
+     * Updated for 10.3 (and later) to use
+     * CGDisplayRegisterReconfigurationCallback. */
+    Togl   *togl = (Togl *) closure;
+
+    if (0 != (flags & kCGDisplayBeginConfigurationFlag))
+        return;                 /* wait until display is reconfigured */
+
+    SetMacBufRect(togl);
+    Togl_MakeCurrent(togl);
+    if (togl->Ctx) {
+        if (togl->ReshapeProc) {
+            Togl_CallCallback(togl, togl->ReshapeProc);
+        } else {
+            Togl_SetViewPort(togl);
         }
     }
 }
@@ -1675,6 +1963,11 @@ Togl_ObjConfigure(Tcl_Interp *interp, Togl *togl,
                 continue;
             }
             if (togl->FullscreenFlag) {
+#if defined(TOGL_NSOPENGL)
+	        Tcl_AppendResult(interp,
+                       "Fullscreen not supported with Cocoa Tk", NULL);
+                continue;
+#endif
 #ifndef TOGL_AGL
 #  if TK_MAJOR_VERSION < 8 || (TK_MAJOR_VERSION == 8 && TK_MINOR_VERSION < 5)
                 Tcl_AppendResult(interp,
@@ -1741,7 +2034,7 @@ Togl_ObjWidget(ClientData clientData, Tcl_Interp *interp, int objc,
         "existsoverlay", "ismappedoverlay",
         "getoverlaytransparentvalue",
         "drawbuffer", "clear", "frustum", "ortho",
-        "numeyes", "contexttag", "copycontextto",
+        "numeyes", "contexttag", "copycontextto", "maketopfortrackpadevents",
         NULL
     };
     enum command
@@ -1755,7 +2048,7 @@ Togl_ObjWidget(ClientData clientData, Tcl_Interp *interp, int objc,
         TOGL_EXISTSOVERLAY, TOGL_ISMAPPEDOVERLAY,
         TOGL_GETOVERLAYTRANSPARENTVALUE,
         TOGL_DRAWBUFFER, TOGL_CLEAR, TOGL_FRUSTUM, TOGL_ORTHO,
-        TOGL_NUMEYES, TOGL_CONTEXTTAG, TOGL_COPYCONTEXTTO
+        TOGL_NUMEYES, TOGL_CONTEXTTAG, TOGL_COPYCONTEXTTO, TOGL_MAKETOPFORTRACKPADEVENTS
     };
     int     result = TCL_OK;
     Tcl_Obj *objPtr;
@@ -2191,6 +2484,21 @@ Togl_ObjWidget(ClientData clientData, Tcl_Interp *interp, int objc,
               }
               result = Togl_CopyContext(togl, to, mask);
           }
+    case TOGL_MAKETOPFORTRACKPADEVENTS:
+          if (objc == 2) {
+	    // This hack places the Togl NSView at the top of sibling views so that it receives
+	    // trackpad events.  The hierarchy is not used for drawing, nor for mouse event dispatching.
+	    [togl->nsview retain];
+	    [togl->nsview removeFromSuperview];
+	    MacDrawable *d = ((TkWindow *) togl->TkWin)->privatePtr;
+	    NSView *topview = d->toplevel->view;
+	    [topview addSubview:togl->nsview];
+	    [togl->nsview release];
+          } else {
+              Tcl_WrongNumArgs(interp, 2, objv, NULL);
+              result = TCL_ERROR;
+          }
+          break;
     }
 
     Tk_Release((ClientData) togl);
@@ -2311,6 +2619,7 @@ Togl_ObjCmd(ClientData clientData, Tcl_Interp *interp, int objc,
 #endif
     togl->Width = 0;
     togl->Height = 0;
+    togl->PixelScale = 1;
     togl->SetGrid = 0;
     togl->TimerInterval = 0;
     togl->RgbaFlag = True;
@@ -2350,6 +2659,8 @@ Togl_ObjCmd(ClientData clientData, Tcl_Interp *interp, int objc,
     togl->pbufferLost = 0;
 #elif defined(TOGL_AGL)
     togl->pbuf = NULL;
+#elif defined(TOGL_NSOPENGL)
+    togl->pbuf = NULL;
 #endif
 
     togl->CreateProc = NULL;
@@ -2359,6 +2670,11 @@ Togl_ObjCmd(ClientData clientData, Tcl_Interp *interp, int objc,
     togl->TimerProc = NULL;
     togl->timerHandler = NULL;
     togl->OverlayDisplayProc = NULL;
+    togl->MagnifyProc = NULL;
+    togl->RotateProc = NULL;
+    togl->ScrollProc = NULL;
+    togl->ScrollWheelProc = NULL;
+    togl->TouchesProc = NULL;
     togl->ShareList = NULL;
     togl->ShareContext = NULL;
     togl->Ident = NULL;
@@ -2442,7 +2758,7 @@ Togl_ObjCmd(ClientData clientData, Tcl_Interp *interp, int objc,
             goto error;
         }
     }
-#ifdef TOGL_AGL
+#if defined(TOGL_AGL) || defined(TOGL_NSOPENGL)
     if (!togl->PbufferFlag)
         SetMacBufRect(togl);
 #endif
@@ -2452,11 +2768,11 @@ Togl_ObjCmd(ClientData clientData, Tcl_Interp *interp, int objc,
             goto error;
         }
     } else {
-        glViewport(0, 0, togl->Width, togl->Height);
+        Togl_SetViewPort(togl);
 #if defined(TOGL_X11)
         if (togl->OverlayFlag) {
             Togl_UseLayer(togl, TOGL_OVERLAY);
-            glViewport(0, 0, togl->Width, togl->Height);
+            Togl_SetViewPort(togl);
             Togl_UseLayer(togl, TOGL_NORMAL);
         }
 #endif
@@ -2569,7 +2885,7 @@ SetupOverlay(Togl *togl)
 
     return TCL_OK;
 
-#  elif defined(TOGL_WGL) || defined(TOGL_AGL)
+#  elif defined(TOGL_WGL) || defined(TOGL_AGL) || defined(TOGL_NSOPENGL)
     /* not yet implemented on these */
     return TCL_ERROR;
 #  endif
@@ -2695,7 +3011,7 @@ Togl_MakeWindow(Tk_Window tkwin, Window parent, ClientData instanceData)
      * Windows and Mac OS X need the window created before OpenGL context
      * is created.  So do that now and set the window variable. 
      */
-#if defined(TOGL_AGL)
+#if defined(TOGL_AGL) || defined(TOGL_NSOPENGL)
     {
         TkWindow *winPtr = (TkWindow *) tkwin;
 
@@ -2780,11 +3096,13 @@ Togl_MakeWindow(Tk_Window tkwin, Window parent, ClientData instanceData)
 #if defined(TOGL_X11)
         togl->VisInfo = togl_pixelFormat(togl, scrnum);
         if (togl->VisInfo == NULL)
-#elif defined(TOGL_WGL) || defined(TOGL_AGL)
+#elif defined(TOGL_WGL) || defined(TOGL_AGL) || defined(TOGL_NSOPENGL)
 #  ifdef TOGL_WGL
         togl->PixelFormat = togl_pixelFormat(togl, hwnd);
+#  elif defined(TOGL_NSOPENGL)
+        togl->PixelFormat = (void *)togl_pixelFormat(togl);
 #  else
-        togl->PixelFormat = (Tcl_WideInt) togl_pixelFormat(togl);
+        togl->PixelFormat = (Tcl_WideInt)togl_pixelFormat(togl);
 #  endif
         if (togl->PixelFormat == 0)
 #endif
@@ -2810,7 +3128,7 @@ Togl_MakeWindow(Tk_Window tkwin, Window parent, ClientData instanceData)
         goto error;
     }
 #endif
-#if defined(TOGL_WGL) || defined(TOGL_AGL)
+#if defined(TOGL_WGL) || defined(TOGL_AGL) || defined(TOGL_NSOPENGL)
     if (togl->VisInfo == NULL) {
         /* 
          * Create a new OpenGL rendering context. And check to share lists.
@@ -2984,6 +3302,64 @@ Togl_MakeWindow(Tk_Window tkwin, Window parent, ClientData instanceData)
                 TCL_STUPID "couldn't set drawable", TCL_STATIC);
         goto error;
     }
+#elif defined(TOGL_NSOPENGL)
+    NSOpenGLContext *shareCtx = NULL;
+    if (togl->ShareList) {
+        /* share display lists with existing togl widget */
+        Togl   *shareWith = FindTogl(togl, togl->ShareList);
+
+        if (shareWith) {
+            shareCtx = shareWith->Ctx;
+            togl->contextTag = shareWith->contextTag;
+        }
+    }
+    if (togl->ShareContext && FindTogl(togl, togl->ShareContext)) {
+        /* share OpenGL context with existing Togl widget */
+      Tcl_SetResult(togl->Interp,
+                    TCL_STUPID "unable to share NSOpenGL context", TCL_STATIC);
+      goto error;
+      /*
+        Togl   *shareWith = FindTogl(togl, togl->ShareContext);
+
+        if (togl->PixelFormat != shareWith->PixelFormat) {
+            Tcl_SetResult(togl->Interp,
+                    TCL_STUPID "unable to share OpenGL context", TCL_STATIC);
+            goto error;
+        }
+	togl->Ctx = [[NSOpenGLContext alloc] initWithCGLContextObj:shareWith->Ctx];
+      */
+	/* initWithCGLContextObj requires Mac OS 10.6 */
+    } else {
+      togl->Ctx = [NSOpenGLContext alloc];
+      if ([togl->Ctx initWithFormat:togl->PixelFormat shareContext:shareCtx]
+	  == nil)
+	{
+	  [togl->PixelFormat release];
+	  togl->PixelFormat = 0;
+	  Tcl_SetResult(togl->Interp,
+			TCL_STUPID "Could not obtain OpenGL context",
+			TCL_STATIC);
+	  goto error;
+	}
+    }
+
+    if (!togl->PbufferFlag) {
+      togl->nsview = [[ToglNSView alloc] initWithFrame:NSZeroRect];
+      [togl->nsview setTogl:togl];
+      if ([togl->nsview respondsToSelector:@selector(setWantsBestResolutionOpenGLSurface:)]) {
+	[togl->nsview setWantsBestResolutionOpenGLSurface:YES];
+      }
+      [togl->nsview setAcceptsTouchEvents:YES];
+      MacDrawable *d = ((TkWindow *) togl->TkWin)->privatePtr;
+      NSView *topview = d->toplevel->view;
+      [topview addSubview:togl->nsview];
+      /* TODO: Appears setView has to be deferred until window mapped.
+       * or it gives "invalid drawable" error.  But MapNotify doesn't happen.
+       * I think toplevel is already mapped.  Iconifying and uniconifying
+       * main window makes the graphics work.
+       */
+      /*      [togl->Ctx setView:togl->nsview];*/
+    }
 #endif
 
     if (togl->Ctx == NULL) {
@@ -2991,13 +3367,13 @@ Togl_MakeWindow(Tk_Window tkwin, Window parent, ClientData instanceData)
                 TCL_STUPID "could not create rendering context", TCL_STATIC);
         goto error;
     }
-#ifdef TOGL_AGL
+#if defined(TOGL_AGL) || defined(TOGL_NSOPENGL)
     CGDisplayRegisterReconfigurationCallback(ReconfigureCB, togl);
 #endif
 
     if (togl->PbufferFlag) {
         /* Don't need a colormap, nor overlay, nor be displayed */
-#if defined(TOGL_X11) || defined(TOGL_AGL)
+#if defined(TOGL_X11) || defined(TOGL_AGL) || defined(TOGL_NSOPENGL)
         togl->pbuf = togl_createPbuffer(togl);
         if (!togl->pbuf) {
             /* tcl result set in togl_createPbuffer */
@@ -3005,6 +3381,14 @@ Togl_MakeWindow(Tk_Window tkwin, Window parent, ClientData instanceData)
             if (!togl->ShareContext) {
                 aglDestroyContext(togl->Ctx);
                 aglDestroyPixelFormat((AGLPixelFormat) togl->PixelFormat);
+            }
+            togl->Ctx = NULL;
+            togl->PixelFormat = 0;
+#  endif
+#  ifdef TOGL_NSOPENGL
+            if (!togl->ShareContext) {
+	        [togl->Ctx release];
+		[togl->PixelFormat release];
             }
             togl->Ctx = NULL;
             togl->PixelFormat = 0;
@@ -3035,7 +3419,7 @@ Togl_MakeWindow(Tk_Window tkwin, Window parent, ClientData instanceData)
         } else {
             cmap = DefaultColormap(dpy, scrnum);
         }
-#elif defined(TOGL_AGL)
+#elif defined(TOGL_AGL) || defined(TOGL_NSOPENGL)
         cmap = DefaultColormap(dpy, scrnum);
 #endif
     } else {
@@ -3060,7 +3444,7 @@ Togl_MakeWindow(Tk_Window tkwin, Window parent, ClientData instanceData)
                     togl->VisInfo->visual, AllocAll);
 #elif defined(TOGL_WGL)
             cmap = Win32CreateCiColormap(togl);
-#elif defined(TOGL_AGL)
+#elif defined(TOGL_AGL) || defined(TOGL_NSOPENGL)
             /* need to figure out how to do this correctly on Mac... */
             cmap = DefaultColormap(dpy, scrnum);
 #endif
@@ -3160,7 +3544,7 @@ Togl_MakeWindow(Tk_Window tkwin, Window parent, ClientData instanceData)
     }
 #endif
 
-#ifndef TOGL_AGL
+#if !defined(TOGL_AGL)
     /* Request the X window to be displayed */
     (void) XMapWindow(dpy, window);
 #endif
@@ -3168,7 +3552,7 @@ Togl_MakeWindow(Tk_Window tkwin, Window parent, ClientData instanceData)
     if (!togl->RgbaFlag) {
         int     index_size;
 
-#if defined(TOGL_X11) || defined(TOGL_AGL)
+#if defined(TOGL_X11) || defined(TOGL_AGL) || defined(TOGL_NSOPENGL)
         GLint   index_bits;
 
         glGetIntegerv(GL_INDEX_BITS, &index_bits);
@@ -3260,6 +3644,12 @@ Togl_WorldChanged(ClientData instanceData)
     }
 }
 
+static void
+Togl_SetViewPort(const struct Togl *togl)
+{
+  glViewport(0, 0, togl->Width*togl->PixelScale, togl->Height*togl->PixelScale);
+}
+
 /* 
  * ToglFree
  *
@@ -3344,6 +3734,17 @@ ToglCmdDeletedProc(ClientData clientData)
 #elif defined(TOGL_AGL)
                 aglDestroyContext(togl->Ctx);
                 CGDisplayRemoveReconfigurationCallback(ReconfigureCB, togl);
+#elif defined(TOGL_NSOPENGL)
+		if (togl->Ctx != nil) {
+		  [togl->Ctx release];
+		  togl->Ctx = nil;
+		}
+		if (togl->nsview != nil) {
+		  [togl->nsview setTogl:nil];
+		  [togl->nsview removeFromSuperview];
+		  togl->nsview = nil;
+		}
+                CGDisplayRemoveReconfigurationCallback(ReconfigureCB, togl);
 #endif
 #if defined(TOGL_X11)
                 XFree(togl->VisInfo);
@@ -3414,6 +3815,21 @@ Togl_RedisplayProc(ClientData clientData, XEvent *eventPtr)
     }
 }
 
+static int
+viewPixelScale(NSView *nsview)
+{
+  int pixelScale = 1;
+#if defined(TOGL_AGL) || defined(TOGL_NSOPENGL)
+  if ([nsview respondsToSelector:@selector(convertRectToBacking:)])
+    {
+      NSRect wbounds = [nsview bounds];
+      NSRect gbounds = [nsview convertRectToBacking:wbounds];
+      pixelScale = (wbounds.size.width > 0 ?
+		    gbounds.size.width / wbounds.size.width : 1);
+    }
+#endif
+  return pixelScale;
+}
 
 /* 
  * This gets called to handle Togl window configuration events
@@ -3425,6 +3841,11 @@ Togl_EventProc(ClientData clientData, XEvent *eventPtr)
 
     switch (eventPtr->type) {
       case Expose:
+#if defined(TOGL_NSOPENGL)
+          if (!Tk_IsMapped(togl->TkWin))
+              /* Tk Cocoa generates expose events for unmapped windows! */
+              break;
+#endif
           if (eventPtr->xexpose.count == 0) {
               if (!togl->UpdatePending
                       && eventPtr->xexpose.window == Tk_WindowId(togl->TkWin)) {
@@ -3437,22 +3858,31 @@ Togl_EventProc(ClientData clientData, XEvent *eventPtr)
                   Togl_PostOverlayRedisplay(togl);
               }
 #endif
+#if defined(TOGL_NSOPENGL)
+              [togl->Ctx setView:togl->nsview];
+              SetMacBufRect(togl);
+#endif
           }
           break;
       case ConfigureNotify:
           if (togl->PbufferFlag)
               break;
+	  int pixelScale = viewPixelScale(togl->nsview);
           if (togl->Width == Tk_Width(togl->TkWin)
-                          && togl->Height == Tk_Height(togl->TkWin)) {
-#ifdef TOGL_AGL
+	      && togl->Height == Tk_Height(togl->TkWin)
+	      && togl->PixelScale == pixelScale) {
+
+#if defined(TOGL_AGL) || defined(TOGL_NSOPENGL)
               // Even though the size hasn't changed,
               // it's position on the screen may have.
-              SetMacBufRect(togl);
+              if (Tk_IsMapped(togl->TkWin))
+                  SetMacBufRect(togl);
 #endif
               break;
           }
           togl->Width = Tk_Width(togl->TkWin);
           togl->Height = Tk_Height(togl->TkWin);
+	  togl->PixelScale = pixelScale;
           (void) XResizeWindow(Tk_Display(togl->TkWin),
                   Tk_WindowId(togl->TkWin), togl->Width, togl->Height);
 #if defined(TOGL_X11)
@@ -3462,18 +3892,20 @@ Togl_EventProc(ClientData clientData, XEvent *eventPtr)
               (void) XRaiseWindow(Tk_Display(togl->TkWin), togl->OverlayWindow);
           }
 #endif
-#ifdef TOGL_AGL
+
+#if defined(TOGL_AGL) || defined(TOGL_NSOPENGL)
           SetMacBufRect(togl);
 #endif
+
           Togl_MakeCurrent(togl);
           if (togl->ReshapeProc) {
               (void) Togl_CallCallback(togl, togl->ReshapeProc);
           } else {
-              glViewport(0, 0, togl->Width, togl->Height);
+              Togl_SetViewPort(togl);
 #if defined(TOGL_X11)
               if (togl->OverlayFlag) {
                   Togl_UseLayer(togl, TOGL_OVERLAY);
-                  glViewport(0, 0, togl->Width, togl->Height);
+                  Togl_SetViewPort(togl);
                   Togl_UseLayer(togl, TOGL_NORMAL);
               }
 #endif
@@ -3492,6 +3924,15 @@ Togl_EventProc(ClientData clientData, XEvent *eventPtr)
               SetMacBufRect(togl);
           }
 #endif
+#if defined(TOGL_NSOPENGL)
+          if (!togl->PbufferFlag) {
+              /* 
+               * See comment for the UnmapNotify case below.
+               */
+	      [togl->nsview setHidden:NO]; [togl->Ctx setView:togl->nsview];
+              SetMacBufRect(togl);
+          }
+#endif
           break;
       case UnmapNotify:
 #if defined(TOGL_AGL)
@@ -3505,6 +3946,18 @@ Togl_EventProc(ClientData clientData, XEvent *eventPtr)
                */
               /* aglSetDrawable is deprecated in OS X 10.5 */
               aglSetDrawable(togl->Ctx, NULL);
+          }
+#endif
+#if defined(TOGL_NSOPENGL)
+          if (!togl->PbufferFlag) {
+              /* 
+               * For Mac OS X Aqua, Tk subwindows are not implemented as
+               * separate Aqua windows.  They are just different regions of
+               * a single Aqua window.  To unmap them they are just not drawn.
+               * Have to disconnect the NSView otherwise they will continue
+               * to be displayed directly by Aqua.
+               */
+              [togl->Ctx clearDrawable]; [togl->nsview setHidden:YES];
           }
 #endif
           break;
@@ -3561,6 +4014,8 @@ Togl_SwapBuffers(const Togl *togl)
         glXSwapBuffers(Tk_Display(togl->TkWin), Tk_WindowId(togl->TkWin));
 #elif defined(TOGL_AGL)
         aglSwapBuffers(togl->Ctx);
+#elif defined(TOGL_NSOPENGL)
+        [togl->Ctx flushBuffer];
 #endif
     } else {
         glFlush();
@@ -3587,6 +4042,12 @@ int
 Togl_Height(const Togl *togl)
 {
     return togl->Height;
+}
+
+int
+Togl_PixelScale(const Togl *togl)
+{
+    return togl->PixelScale;
 }
 
 
@@ -3892,7 +4353,7 @@ Togl_AllocColor(const Togl *togl, float red, float green, float blue)
 #elif defined(TOGL_WGL)
     return Win32AllocColor(togl, red, green, blue);
 
-#elif defined(TOGL_AGL)
+#elif defined(TOGL_AGL) || defined(TOGL_NSOPENGL)
     /* still need to implement this on Mac... */
     return 0;
 
@@ -4014,6 +4475,8 @@ Togl_UseLayer(Togl *togl, int layer)
                 Tk_WindowId(togl->TkWin), togl->Ctx);
 #elif defined(TOGL_AGL)
         (void) aglSetCurrentContext(togl->Ctx);
+#elif defined(TOGL_NSOPENGL)
+        [togl->Ctx makeCurrentContext];
 #endif
     } else if (layer == TOGL_OVERLAY && togl->OverlayWindow) {
 #if defined(TOGL_WGL)
@@ -4025,7 +4488,7 @@ Togl_UseLayer(Togl *togl, int layer)
 #elif defined(TOGL_X11)
         (void) glXMakeCurrent(Tk_Display(togl->TkWin),
                 togl->OverlayWindow, togl->OverlayCtx);
-#elif defined(TOGL_AGL)
+#elif defined(TOGL_AGL) || defined(TOGL_NSOPENGL)
 #endif
     } else {
         /* error */
@@ -4176,6 +4639,13 @@ Togl_CopyContext(const Togl *from, const Togl *to, unsigned mask)
                 aglErrorString(aglGetError()), NULL);
         return TCL_ERROR;
     }
+#elif defined(TOGL_NSOPENGL)
+    int     same = (from->Ctx == to->Ctx);
+
+    if (same) {
+      [NSOpenGLContext clearCurrentContext];
+    }
+    [to->Ctx copyAttributesFromContext:from->Ctx withMask:mask];
 #endif
     if (same)
         Togl_MakeCurrent(to);
@@ -4270,7 +4740,7 @@ Togl_DrawBuffer(Togl *togl, GLenum mode)
     if (togl->Stereo <= TOGL_STEREO_ONE_EYE_MAX) {
         /* Only drawing a single eye */
         if (togl->currentStereoBuffer != STEREO_BUFFER_NONE) {
-            glViewport(0, 0, togl->Width, togl->Height);
+            Togl_SetViewPort(togl);
             glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
             togl->currentStereoBuffer = STEREO_BUFFER_NONE;
         }
@@ -4330,6 +4800,7 @@ Togl_DrawBuffer(Togl *togl, GLenum mode)
               break;
         }
     }
+    int w = togl->Width*togl->PixelScale, h = togl->Height*togl->PixelScale;
     switch (togl->Stereo) {
       default:
           break;
@@ -4348,28 +4819,28 @@ Togl_DrawBuffer(Togl *togl, GLenum mode)
               glColorMask(GL_TRUE, GL_FALSE, GL_FALSE, GL_TRUE);
           else
               glColorMask(GL_FALSE, GL_TRUE, GL_TRUE, GL_TRUE);
-          glViewport(0, 0, togl->Width, togl->Height);
+          glViewport(0, 0, w, h);
           break;
       case TOGL_STEREO_CROSS_EYE:
           if (togl->currentStereoBuffer == STEREO_BUFFER_LEFT)
-              glViewport(togl->Width / 2 + 1, 0, togl->Width / 2, togl->Height);
+              glViewport(w / 2 + 1, 0, w / 2, h);
           else
-              glViewport(0, 0, togl->Width / 2, togl->Height);
+              glViewport(0, 0, w / 2, h);
           break;
       case TOGL_STEREO_WALL_EYE:
           if (togl->currentStereoBuffer == STEREO_BUFFER_LEFT)
-              glViewport(0, 0, togl->Width / 2, togl->Height);
+              glViewport(0, 0, w / 2, h);
           else
-              glViewport(togl->Width / 2 + 1, 0, togl->Width / 2, togl->Height);
+              glViewport(w / 2 + 1, 0, w / 2, h);
           break;
       case TOGL_STEREO_DTI:
           if (togl->currentStereoBuffer == STEREO_BUFFER_LEFT)
-              glViewport(0, 0, togl->Width / 2, togl->Height);
+              glViewport(0, 0, w / 2, h);
           else
-              glViewport(togl->Width / 2 + 1, 0, togl->Width / 2, togl->Height);
+              glViewport(w / 2 + 1, 0, w / 2, h);
           break;
       case TOGL_STEREO_ROW_INTERLEAVED:
-          glViewport(0, 0, togl->Width, togl->Height);
+          glViewport(0, 0, w, h);
           break;
     }
     glDrawBuffer(mode);
@@ -4455,7 +4926,7 @@ Togl_Clear(const Togl *togl, GLbitfield mask)
             glPushAttrib(GL_COLOR_BUFFER_BIT | GL_ENABLE_BIT
                     | GL_LINE_BIT | GL_VIEWPORT_BIT);
             // 2d projection
-            glViewport(0, 0, togl->Width, togl->Height);
+            Togl_SetViewPort(togl);
             glMatrixMode(GL_PROJECTION);
             glPushMatrix();
             glLoadIdentity();
