@@ -2,7 +2,7 @@
 # the next line restarts using wish \
 exec wish "$0" "$@"
 
-# $Id: stereo.tcl,v 1.3 2001/12/20 13:59:31 beskow Exp $
+# $Id: stereo.tcl,v 1.4 2004/12/21 05:28:39 gregcouch Exp $
 
 # Togl - a Tk OpenGL widget
 # Copyright (C) 1996  Brian Paul and Ben Bederson
@@ -10,6 +10,9 @@ exec wish "$0" "$@"
 
 
 # $Log: stereo.tcl,v $
+# Revision 1.4  2004/12/21 05:28:39  gregcouch
+# Apply outstanding patches and Mac OS X support.
+#
 # Revision 1.3  2001/12/20 13:59:31  beskow
 # Improved error-handling in togl.c in case of window creation failure
 # Added pkgIndex target to makefile
@@ -70,7 +73,9 @@ proc setup {} {
     pack .sy  -fill x
     pack .btn -fill x
 
-    puts "use /usr/gfx/setmon -n 60HZ to reset display and /usr/gfx/setmon -n STR_TOP to put in display in stereo mode"
+    if {[string first $::tcl_platform(os) IRIX] != -1} {
+        puts "use /usr/gfx/setmon -n 60 to reset display and /usr/gfx/setmon -n STR_RECT to put in display in stereo mode"
+    }
 
 }
 
