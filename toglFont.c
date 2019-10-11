@@ -79,7 +79,7 @@ Togl_FontString(Tcl_Obj *obj)
     register unsigned len;
     Togl_BitmapFontInfo *bfi = BITMAP_FONT_INFO(obj);
 
-#ifndef TOGL_AGL
+#if !defined(TOGL_AGL) && !defined(TOGL_NSOPENGL)
     snprintf(buf, sizeof buf - 1, "{{%s} %d %d %d}",
             Togl_BitmapFontType.name, bfi->base, bfi->first, bfi->last);
 #else
@@ -325,7 +325,7 @@ Togl_LoadBitmapFont(const Togl *togl, const char *fontname)
     WinFont *winfont;
     HFONT   oldFont;
     TEXTMETRIC tm;
-#elif defined(TOGL_AGL)
+#elif defined(TOGL_AGL) || defined(TOGL_NSOPENGL)
     MacFont *macfont;
 #endif
     int     first, last, count;
@@ -351,7 +351,7 @@ Togl_LoadBitmapFont(const Togl *togl, const char *fontname)
     GetTextMetrics(togl->tglGLHdc, &tm);
     first = tm.tmFirstChar;
     last = tm.tmLastChar;
-#elif defined(TOGL_AGL)
+#elif defined(TOGL_AGL) || defined(TOGL_NSOPENGL)
     macfont = (MacFont *) font;
     first = 10;                 /* don't know how to determine font range on
                                  * Mac... */
@@ -380,6 +380,8 @@ Togl_LoadBitmapFont(const Togl *togl, const char *fontname)
     aglUseFont(togl->Ctx,
             macfont->subFontArray->familyPtr->faceNum,
             macfont->style, macfont->size, first, count, fontbase + first);
+#elif defined(TOGL_NSOPENGL)
+    /* No NSOpenGL equivalent to aglUseFont(). */
 #endif
     Tk_FreeFont(font);
 

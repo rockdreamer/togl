@@ -85,6 +85,11 @@ declare 47 generic {
 	Bool Togl_HasMultisample(const Togl *togl)
 }
 
+declare 49 generic {
+	int Togl_PixelScale(const Togl *togl)
+}
+
+
 # Color Index mode
 declare 10 generic {
 	unsigned long Togl_AllocColor(const Togl *togl, float red,

@@ -18,6 +18,9 @@
 #if defined(TOGL_AGL)
 #  include <OpenGL/glu.h>
 #  include <AGL/agl.h>
+#elif defined(TOGL_NSOPENGL)
+#  include <OpenGL/glu.h>
+#  include <OpenGL/OpenGL.h>
 #else
 #  include <GL/glu.h>
 #endif
@@ -314,7 +317,7 @@ pbuffer_cb(ClientData clientData, Tcl_Interp *interp, int objc,
         glBindTexture(GL_TEXTURE_2D, texture);
         glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-#ifndef TOGL_AGL
+#if !defined(TOGL_AGL) && !defined(TOGL_NSOPENGL)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
                 GL_LINEAR_MIPMAP_LINEAR);
 #else

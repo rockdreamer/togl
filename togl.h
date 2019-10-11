@@ -25,7 +25,7 @@
 #    endif
 #  endif
 
-#  ifdef TOGL_AGL
+#  if defined(TOGL_AGL) || defined(TOGL_NSOPENGL)
 #    ifndef MAC_OSX_TCL
 #      define MAC_OSX_TCL 1
 #    endif
@@ -47,6 +47,8 @@
 #  include <tk.h>
 #  if defined(TOGL_AGL)
 #    include <OpenGL/gl.h>
+#  elif defined(TOGL_NSOPENGL)
+#    include <OpenGL/OpenGL.h>
 #  else
 #    include <GL/gl.h>
 #  endif

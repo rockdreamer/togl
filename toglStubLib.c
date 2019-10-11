@@ -9,7 +9,7 @@
 
 #include "togl.h"
 
-ToglStubs *toglStubsPtr;
+const ToglStubs *toglStubsPtr;
 
 /* 
  ** Ensure that Togl_InitStubs is built as an exported symbol.  The other stub
