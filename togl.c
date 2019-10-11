@@ -102,7 +102,10 @@
 #  undef Cursor
 #  include <tkMacOSXInt.h>      /* usa MacDrawable */
 #  include <ApplicationServices/ApplicationServices.h>
-#  define Togl_MacOSXGetDrawablePort(togl) TkMacOSXGetDrawablePort((Drawable) ((TkWindow *) togl->TkWin)->privatePtr)
+#  define TOGL_COCOA 1
+#  if !defined(TOGL_COCOA)
+#    define Togl_MacOSXGetDrawablePort(togl) TkMacOSXGetDrawablePort((Drawable) ((TkWindow *) togl->TkWin)->privatePtr)
+#  endif
 
 /*** Mac Cocoa headers ***/
 #elif defined(TOGL_NSOPENGL)
@@ -609,6 +612,9 @@ static void ToglCmdDeletedProc(ClientData);
 
 #if defined(TOGL_AGL) || defined(TOGL_NSOPENGL)
 static void SetMacBufRect(Togl *togl);
+#if defined(TOGL_COCOA)
+static WindowRef Togl_MacOSXGetDrawableWindow(Tk_Window w);
+#endif
 #endif
 
 #if defined(TOGL_WGL)
@@ -1376,9 +1382,13 @@ Togl_MakeCurrent(const Togl *togl)
         (void) aglSetCurrentContext(togl->Ctx);
         if (FindToglWithSameContext(togl) != NULL) {
             if (!togl->PbufferFlag) {
+#if defined(TOGL_COCOA)
+	        WindowRef w = Togl_MacOSXGetDrawableWindow(togl->TkWin);
+	        aglSetWindowRef(togl->Ctx, w);
+#else
                 AGLDrawable d = Togl_MacOSXGetDrawablePort(togl);
-
                 aglSetDrawable(togl->Ctx, d);
+#endif
             } else {
                 GLint   virtualScreen = aglGetVirtualScreen(togl->Ctx);
 
@@ -1574,6 +1584,18 @@ Togl_SwapInterval(const Togl *togl, int interval)
 }
 
 #if defined(TOGL_AGL)
+
+#if defined(TOGL_COCOA)
+static WindowRef
+Togl_MacOSXGetDrawableWindow(Tk_Window win)
+{
+  TkWindow *w = (TkWindow *) win;
+  Drawable d = (Drawable) w->window;
+  WindowRef r = TkMacOSXDrawableWindowRef(d);
+  return r;
+}
+#endif
+
 /* tell OpenGL which part of the Mac window to render to */
 static void
 SetMacBufRect(Togl *togl)
@@ -1587,7 +1609,21 @@ SetMacBufRect(Togl *togl)
     wrect[3] = Tk_Height(togl->TkWin);
     wrect[0] = d->xOff;
 
+#if defined(TOGL_COCOA)
+    /*
+      d->xOff, d->yOff seems to be the offset of the togl window upper left
+      corner from its parent or from the containing top level.
+      The wrect[1] value we need is the offset from the bottom of the
+      containing top level.  Seems we may just need the height of the toplevel
+      to make the calculation work.
+    */
+    /* Get bounds for containing top level. */
+    TkWindow *t = (TkWindow *) togl->TkWin;
+    for ( ; !(t->flags & TK_TOP_HIERARCHY) && t->parentPtr ; t = t->parentPtr) ;
+    TkMacOSXWinBounds(t, &r);
+#else
     GetPortBounds(Togl_MacOSXGetDrawablePort(togl), &r);
+#endif
 
     wrect[1] = r.bottom - wrect[3] - d->yOff;
 
@@ -3292,9 +3328,20 @@ Togl_MakeWindow(Tk_Window tkwin, Window parent, ClientData instanceData)
                     ": unknown reason", TCL_STATIC);
         goto error;
     }
-
-    if (!togl->PbufferFlag
-            && !aglSetDrawable(togl->Ctx, Togl_MacOSXGetDrawablePort(togl))) {
+    if (!togl->PbufferFlag) {
+#if defined(TOGL_COCOA)
+      /*
+       * Can't use
+           WindowRef r = Togl_MacOSXGetDrawableWindow(togl->TkWin);
+       * because Tk window drawable is not set until Togl_MakeWindow()
+       * routine returns.
+       */
+      WindowRef r = TkMacOSXDrawableWindowRef(window);
+      GLboolean set = aglSetWindowRef(togl->Ctx, r);
+#else
+      GLboolean set = aglSetDrawable(togl->Ctx, Togl_MacOSXGetDrawablePort(togl));
+#endif
+      if (!set) {
         /* aglSetDrawable is deprecated in OS X 10.5 */
         aglDestroyContext(togl->Ctx);
         togl->Ctx = NULL;
@@ -3303,6 +3350,7 @@ Togl_MakeWindow(Tk_Window tkwin, Window parent, ClientData instanceData)
         Tcl_SetResult(togl->Interp,
                 TCL_STUPID "couldn't set drawable", TCL_STATIC);
         goto error;
+      }
     }
 #elif defined(TOGL_NSOPENGL)
     NSOpenGLContext *shareCtx = NULL;
@@ -3919,10 +3967,15 @@ Togl_EventProc(ClientData clientData, XEvent *eventPtr)
               /* 
                * See comment for the UnmapNotify case below.
                */
-              AGLDrawable d = Togl_MacOSXGetDrawablePort(togl);
 
+#if defined(TOGL_COCOA)
+	      WindowRef w = Togl_MacOSXGetDrawableWindow(togl->TkWin);
+              aglSetWindowRef(togl->Ctx, w);
+#else
+              AGLDrawable d = Togl_MacOSXGetDrawablePort(togl);
               /* aglSetDrawable is deprecated in OS X 10.5 */
               aglSetDrawable(togl->Ctx, d);
+#endif
               SetMacBufRect(togl);
           }
 #endif
@@ -3946,8 +3999,12 @@ Togl_EventProc(ClientData clientData, XEvent *eventPtr)
                * Have to disconnect the AGL context otherwise they will continue
                * to be displayed directly by Aqua.
                */
+#if defined(TOGL_COCOA)
+              aglSetWindowRef(togl->Ctx, NULL);
+#else
               /* aglSetDrawable is deprecated in OS X 10.5 */
               aglSetDrawable(togl->Ctx, NULL);
+#endif
           }
 #endif
 #if defined(TOGL_NSOPENGL)
