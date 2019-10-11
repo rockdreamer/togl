@@ -32,8 +32,6 @@ togl_pixelFormat(Togl *togl)
     }
 
     attribs[na++] = NSOpenGLPFAMinimumPolicy;
-    /* ask for hardware-accelerated onscreen */
-    attribs[na++] = NSOpenGLPFAAccelerated;
     attribs[na++] = NSOpenGLPFANoRecovery;
     if (togl->RgbaFlag) {
         /* RGB[A] mode */
