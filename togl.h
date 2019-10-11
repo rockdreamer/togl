@@ -77,9 +77,9 @@ extern "C" {
 /* *INDENT-ON* */
 #  endif
 
-#  define TOGL_VERSION "2.1"
+#  define TOGL_VERSION "2.2"
 #  define TOGL_MAJOR_VERSION 2
-#  define TOGL_MINOR_VERSION 1
+#  define TOGL_MINOR_VERSION 2
 
 /* 
  * "Standard" fonts which can be specified to Togl_LoadBitmapFont()
