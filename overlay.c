@@ -1,4 +1,4 @@
-/* $Id: overlay.c,v 1.2 1997/08/22 02:47:54 brianp Exp $ */
+/* $Id: overlay.c,v 1.4 2001/12/20 13:59:31 beskow Exp $ */
 
 /*
  * Togl - a Tk OpenGL widget
@@ -9,6 +9,19 @@
 
 /*
  * $Log: overlay.c,v $
+ * Revision 1.4  2001/12/20 13:59:31  beskow
+ * Improved error-handling in togl.c in case of window creation failure
+ * Added pkgIndex target to makefile
+ * Updated documentation to reflect stubs-interface (Togl.html + new README.stubs)
+ * Added tk8.4a3 headers
+ * Removed obsolete Tk internal headers
+ *
+ * Revision 1.2  2001/04/18 13:26:52  Administrator
+ * Fixed windows build system
+ *
+ * Revision 1.1.1.1  2001/02/15 16:32:28  beskow
+ * imported sources
+ *
  * Revision 1.2  1997/08/22 02:47:54  brianp
  * include togl.h first.  updated for Tcl/Tk 8.0
  *
@@ -164,17 +177,17 @@ void display_cb( struct Togl *togl )
 /*
  * Called by Tk_Main() to let me initialize the modules (Togl) I will need.
  */
-int my_init( Tcl_Interp *interp )
+EXPORT(int,Overlay_Init)(Tcl_Interp *interp)
 {
    /*
     * Initialize Tcl, Tk, and the Togl widget module.
     */
-   if (Tcl_Init(interp) == TCL_ERROR) {
-      return TCL_ERROR;
-   }
-   if (Tk_Init(interp) == TCL_ERROR) {
-      return TCL_ERROR;
-   }
+#ifdef USE_TCL_STUBS
+  if (Tcl_InitStubs(interp, "8.1", 0) == NULL) {return TCL_ERROR;}
+#endif
+#ifdef USE_TK_STUBS
+  if (Tk_InitStubs(interp, "8.1", 0) == NULL) {return TCL_ERROR;}
+#endif
    if (Togl_Init(interp) == TCL_ERROR) {
       return TCL_ERROR;
    }
@@ -200,25 +213,5 @@ int my_init( Tcl_Interp *interp )
     */
    /*NOTHING*/
 
-   /*
-    * Specify a user-specific startup file to invoke if the application
-    * is run interactively.  Typically the startup file is "~/.apprc"
-    * where "app" is the name of the application.  If this line is deleted
-    * then no user-specific startup file will be run under any conditions.
-    */
-#if (TCL_MAJOR_VERSION * 100 + TCL_MINOR_VERSION) >= 705
-   Tcl_SetVar( interp, "tcl_rcFileName", "./overlay.tcl", TCL_GLOBAL_ONLY );
-#else
-   tcl_RcFileName = "./overlay.tcl";
-#endif
-
    return TCL_OK;
-}
-
-
-
-int main( int argc, char *argv[] )
-{
-   Tk_Main( argc, argv, my_init );
-   return 0;
 }

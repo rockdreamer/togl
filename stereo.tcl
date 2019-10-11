@@ -1,4 +1,8 @@
-# $Id: stereo.tcl,v 1.1 1997/10/01 02:53:12 brianp Exp $
+#!/bin/sh
+# the next line restarts using wish \
+exec wish "$0" "$@"
+
+# $Id: stereo.tcl,v 1.3 2001/12/20 13:59:31 beskow Exp $
 
 # Togl - a Tk OpenGL widget
 # Copyright (C) 1996  Brian Paul and Ben Bederson
@@ -6,6 +10,16 @@
 
 
 # $Log: stereo.tcl,v $
+# Revision 1.3  2001/12/20 13:59:31  beskow
+# Improved error-handling in togl.c in case of window creation failure
+# Added pkgIndex target to makefile
+# Updated documentation to reflect stubs-interface (Togl.html + new README.stubs)
+# Added tk8.4a3 headers
+# Removed obsolete Tk internal headers
+#
+# Revision 1.2  2001/01/29 18:11:53  brianp
+# Jonas Beskow's changes to use Tcl/Tk stub interface
+#
 # Revision 1.1  1997/10/01 02:53:12  brianp
 # Initial revision
 #
@@ -18,7 +32,7 @@
 # An Tk/OpenGL widget demo with two windows, one single buffered and the
 # other double buffered.
 
-
+load [file dirname [info script]]/stereo[info sharedlibextension]
 
 proc setup {} {
     global scale

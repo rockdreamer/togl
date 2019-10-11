@@ -1,4 +1,4 @@
-/* $Id: double.c,v 1.7 1998/03/12 03:52:31 brianp Exp $ */
+/* $Id: double.c,v 1.11 2002/11/15 12:37:32 beskow Exp $ */
 
 /*
  * Togl - a Tk OpenGL widget
@@ -9,6 +9,22 @@
 
 /*
  * $Log: double.c,v $
+ * Revision 1.11  2002/11/15 12:37:32  beskow
+ * Update for Tcl/Tk 8.4
+ *
+ * Revision 1.10  2001/12/20 13:59:31  beskow
+ * Improved error-handling in togl.c in case of window creation failure
+ * Added pkgIndex target to makefile
+ * Updated documentation to reflect stubs-interface (Togl.html + new README.stubs)
+ * Added tk8.4a3 headers
+ * Removed obsolete Tk internal headers
+ *
+ * Revision 1.1.1.1  2001/02/15 16:32:28  beskow
+ * imported sources
+ *
+ * Revision 1.8  2000/05/12 00:28:12  thiessen
+ * first Macintosh port
+ *
  * Revision 1.7  1998/03/12 03:52:31  brianp
  * now sharing display lists between the widgets
  *
@@ -39,14 +55,14 @@
 #include <tcl.h>
 #include <tk.h>
 
-
 /*
  * The following variable is a special hack that is needed in order for
  * Sun shared libraries to be used for Tcl.
  */
+#ifdef SUN
 extern int matherr();
 int *tclDummyMathPtr = (int *) matherr;
-
+#endif
 
 static GLuint FontBase;
 static float xAngle = 0.0, yAngle = 0.0, zAngle = 0.0;
@@ -60,6 +76,7 @@ static GLfloat CornerX, CornerY, CornerZ;  /* where to print strings */
  */
 void create_cb( struct Togl *togl )
 {
+
    FontBase = Togl_LoadBitmapFont( togl, TOGL_BITMAP_8_BY_13 );
    if (!FontBase) {
       printf("Couldn't load font!\n");
@@ -250,37 +267,25 @@ int getYrot_cb( ClientData clientData, Tcl_Interp *interp,
   return TCL_OK;
 }
 
-#if defined(WIN32)
-EXTERN int		TkConsoleInit(Tcl_Interp *interp);
-#endif /* WIN32 */
-
 /*
  * Called by Tk_Main() to let me initialize the modules (Togl) I will need.
  */
-int my_init( Tcl_Interp *interp )
+EXPORT(int,Double_Init)( Tcl_Interp *interp )
 {
-   /*
-    * Initialize Tcl, Tk, and the Togl widget module.
-    */
-   if (Tcl_Init(interp) == TCL_ERROR) {
-      return TCL_ERROR;
-   }
-   if (Tk_Init(interp) == TCL_ERROR) {
-      return TCL_ERROR;
-   }
-
-#ifdef WIN32
-    /*
-     * Set up a console window. Delete the following statement if you do not need that.
-     */
-    if (TkConsoleInit(interp) == TCL_ERROR) {
-	   return TCL_ERROR;
-    }
-#endif /* WIN32 */
+#ifdef USE_TCL_STUBS
+  if (Tcl_InitStubs(interp, "8.1", 0) == NULL) {return TCL_ERROR;}
+#endif
+#ifdef USE_TK_STUBS
+  if (Tk_InitStubs(interp, "8.1", 0) == NULL) {return TCL_ERROR;}
+#endif
 
    if (Togl_Init(interp) == TCL_ERROR) {
       return TCL_ERROR;
    }
+
+#ifdef macintosh
+	 Togl_MacSetupMainInterp(interp);
+#endif
 
    /*
     * Specify the C callback functions for widget creation, display,
@@ -302,29 +307,11 @@ int my_init( Tcl_Interp *interp )
     * they weren't already created by the init procedures called above.
     */
    
-   Tcl_CreateCommand( interp, "getXrot", getXrot_cb, (ClientData)NULL,
-                                                     (Tcl_CmdDeleteProc *)NULL );
-   Tcl_CreateCommand( interp, "getYrot", getYrot_cb, (ClientData)NULL,
-                                                     (Tcl_CmdDeleteProc *)NULL );
-   /*
-    * Specify a user-specific startup file to invoke if the application
-    * is run interactively.  Typically the startup file is "~/.apprc"
-    * where "app" is the name of the application.  If this line is deleted
-    * then no user-specific startup file will be run under any conditions.
-    */
-#if (TCL_MAJOR_VERSION * 100 + TCL_MINOR_VERSION) >= 705
-   Tcl_SetVar( interp, "tcl_rcFileName", "./double.tcl", TCL_GLOBAL_ONLY );
-#else
-   tcl_RcFileName = "./double.tcl";
-#endif
-
+   Tcl_CreateCommand( interp, "getXrot", (Tcl_CmdProc *)getXrot_cb, 
+		      (ClientData)NULL,
+		      (Tcl_CmdDeleteProc *)NULL );
+   Tcl_CreateCommand( interp, "getYrot", (Tcl_CmdProc *)getYrot_cb, 
+		      (ClientData)NULL,
+		      (Tcl_CmdDeleteProc *)NULL );
    return TCL_OK;
-}
-
-
-
-int main( int argc, char *argv[] )
-{
-   Tk_Main( argc, argv, my_init );
-   return 0;
 }

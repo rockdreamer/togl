@@ -1,4 +1,4 @@
-/* $Id: index.c,v 1.5 1997/09/16 02:20:02 brianp Exp $ */
+/* $Id: index.c,v 1.7 2001/12/20 13:59:31 beskow Exp $ */
 
 /*
  * Togl - a Tk OpenGL widget
@@ -9,6 +9,16 @@
 
 /*
  * $Log: index.c,v $
+ * Revision 1.7  2001/12/20 13:59:31  beskow
+ * Improved error-handling in togl.c in case of window creation failure
+ * Added pkgIndex target to makefile
+ * Updated documentation to reflect stubs-interface (Togl.html + new README.stubs)
+ * Added tk8.4a3 headers
+ * Removed obsolete Tk internal headers
+ *
+ * Revision 1.6  2001/01/29 18:11:53  brianp
+ * Jonas Beskow's changes to use Tcl/Tk stub interface
+ *
  * Revision 1.5  1997/09/16 02:20:02  brianp
  * Geza Groma's changes
  *
@@ -43,8 +53,10 @@
  * The following variable is a special hack that is needed in order for
  * Sun shared libraries to be used for Tcl.
  */
+#ifdef SUN
 extern int matherr();
 int *tclDummyMathPtr = (int *) matherr;
+#endif
 
 
 /* Our color indexes: */
@@ -161,34 +173,17 @@ void timer_cb( struct Togl *togl )
    Togl_PostRedisplay(togl);
 }
 
-
-#if defined(WIN32)
-EXTERN int		TkConsoleInit(Tcl_Interp *interp);
-#endif /* WIN32 */
-
-/*
- * Called by Tk_Main() to let me initialize the modules (Togl) I will need.
- */
-int my_init( Tcl_Interp *interp )
+EXPORT(int,Index_Init)( Tcl_Interp *interp )
 {
    /*
     * Initialize Tcl, Tk, and the Togl widget module.
     */
-   if (Tcl_Init(interp) == TCL_ERROR) {
-      return TCL_ERROR;
-   }
-   if (Tk_Init(interp) == TCL_ERROR) {
-      return TCL_ERROR;
-   }
-
-#ifdef WIN32
-    /*
-     * Set up a console window. Delete the following statement if you do not need that.
-     */
-    if (TkConsoleInit(interp) == TCL_ERROR) {
-	   return TCL_ERROR;
-    }
-#endif /* WIN32 */
+#ifdef USE_TCL_STUBS
+  if (Tcl_InitStubs(interp, "8.1", 0) == NULL) {return TCL_ERROR;}
+#endif
+#ifdef USE_TK_STUBS
+  if (Tk_InitStubs(interp, "8.1", 0) == NULL) {return TCL_ERROR;}
+#endif
 
    if (Togl_Init(interp) == TCL_ERROR) {
       return TCL_ERROR;
@@ -214,25 +209,5 @@ int my_init( Tcl_Interp *interp )
     */
    /*NOTHING*/
 
-   /*
-    * Specify a user-specific startup file to invoke if the application
-    * is run interactively.  Typically the startup file is "~/.apprc"
-    * where "app" is the name of the application.  If this line is deleted
-    * then no user-specific startup file will be run under any conditions.
-    */
-#if (TCL_MAJOR_VERSION * 100 + TCL_MINOR_VERSION) >= 705
-   Tcl_SetVar( interp, "tcl_rcFileName", "./index.tcl", TCL_GLOBAL_ONLY );
-#else
-   tcl_RcFileName = "./index.tcl";
-#endif
-
    return TCL_OK;
-}
-
-
-
-int main( int argc, char *argv[] )
-{
-   Tk_Main( argc, argv, my_init );
-   return 0;
 }

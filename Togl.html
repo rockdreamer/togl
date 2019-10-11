@@ -1,7 +1,7 @@
 <HTML>
 
 <HEAD>
-<LINK REV="made" HREF="brianp@elastic.avid.com">
+<LINK REV="made" HREF="brian_e_paul@yahoo.com">
 <TITLE>Togl</TITLE>
 </HEAD>
 
@@ -9,8 +9,7 @@
 
 <CENTER>
 <H1>Togl - a Tk OpenGL widget</H1>
-<H3>Version 1.5</H3>
-<H3>Copyright (C) 1996-1998 Brian Paul and Ben Bederson</H3>
+<H3>Copyright (C) 1996-2002 Brian Paul and Ben Bederson</H3>
 </CENTER>
 
 
@@ -65,20 +64,20 @@ OpenGL rendering.
 
 <P>
 Togl is copyrighted by
-<A HREF="http://www.ssec.wisc.edu/~brianp/homepage1.html">Brian Paul</A>
-<A HREF="mailto:brianp@elastic.avid.com">(brianp@elastic.avid.com)</A> and
-<A HREF="http://www.cs.unm.edu/~bederson/">Benjamin Bederson</A>
-<A HREF="mailto:bederson@cs.unm.edu">(bederson@cs.unm.edu)</A>.
+<A HREF="http://www.mesa3d.org/brianp/home.html">Brian Paul</A>
+<A HREF="mailto:brian_e_paul@yahoo.com">(brian_e_paul@yahoo.com)</A> and
+<A HREF="http://www.cs.umd.edu/~bederson/">Benjamin Bederson</A>
+<A HREF="mailto:bederson@cs.umd.edu">(bederson@cs.umd.edu)</A>.
 See the LICENSE file for details.
 </P>
 
-The Togl WWW page is available from:
-<UL>
-<LI>Wisconsin at  <A HREF="http://www.ssec.wisc.edu/~brianp/Togl.html">
-http://www.ssec.wisc.edu/~brianp/Togl.html</A>
-<LI>New Mexico at  <A HREF="http://www.cs.unm.edu/~bederson/Togl.html">
-http://www.cs.unm.edu/~bederson/Togl.html</A>
-</UL>
+<P>
+The <A HREF="http://www.sourceforge.net/project/?form_grp=519">
+Togl project</A> and
+<A HREF="http://Togl.sourceforge.net">home page</A> are
+hosted by <A HREF="http://www.sourceforge.net">SourceForge</A>.
+</P>
+
 
 
 <BR>
@@ -87,16 +86,15 @@ http://www.cs.unm.edu/~bederson/Togl.html</A>
 
 <P>
 You should have
-<A HREF="http://www.sunlabs.com:80/research/tcl/">Tcl and Tk</A>
-installed on your computer, including the Tk source code files.
-Togl has been tested with Tcl 7.4/Tk 4.0, Tcl 7.5/Tk 4.1, Tcl 7.6/Tk 4.2
-and Tcl/Tk 8.0 at this time.
+<A HREF="http://tcl.activestate.com/">Tcl and Tk</A>
+installed on your computer. Togl works with Tcl/Tk
+ver. 8.0 and up. 
 </P>
 
 <P>
 You must also have
-<A HREF="http://www.sgi.com/Technology/openGL/">OpenGL</A> or
-<A HREF="http://www.ssec.wisc.edu/~brianp/Mesa.html">Mesa</A>
+<A HREF="http://www.opengl.org">OpenGL</A> or
+<A HREF="http://www.mesa3d.org">Mesa</A>
 (a free alternative to OpenGL) installed on your computer.
 </P>
 
@@ -106,37 +104,18 @@ effectively.
 <P>
 
 
+
 <BR>
 <A NAME="Getting">
 <H2>Getting Togl</H2>
 
 <P>
-The current version of Togl is 1.5.  You may download it from either:
+The current version of Togl is 1.6.
+Togl can be downloaded from
+<A HREF="http://sourceforge.net/project/showfiles.php?group_id=519">
+SourceForge</A>
 </P>
 
-<UL>
-<LI>Wisconsin at
-<A HREF="ftp://iris.ssec.wisc.edu/pub/misc/Togl-1.5.tar.gz">
-ftp://iris.ssec.wisc.edu/pub/misc/Togl-1.5.tar.gz</A>
-<LI>New Mexico at
-<A HREF="ftp://ftp.cs.unm.edu/pub/bederson/Togl-1.5.tar.gz">
-ftp://ftp.cs.unm.edu/pub/bederson/Togl-1.5.tar.gz</A>
-</UL>
-
-Togl may also be obtained manually with ftp:
-<UL>
-<LI>Host:  iris.ssec.wisc.edu
-<LI>Login:  anonymous
-<LI>Password:  your email address
-<LI>Directory:  pub/misc
-<LI>File:  Togl-1.5.tar.gz
-</UL>
-
-<P>
-The Makefile included with Togl is configured for SGI systems.  It shouldn't
-be hard to adapt it for others.
-In practice, you'll just add togl.c to your application's Makefile.
-</P>
 
 
 <BR>
@@ -144,38 +123,45 @@ In practice, you'll just add togl.c to your application's Makefile.
 <H2>Mailing list</H2>
 
 <P>
-There is no mailing list for Togl at this time but several people have
-asked about it.
-
-If you have the means and time to setup and administer such a mailing
-list please contact Brian.
+See the <A HREF="http://www.sourceforge.net/project/?form_grp=519">
+Togl project at SourceForge</A> for mailing list information.
 </P>
+
 
 
 <BR>
 <A NAME="Using">
 <H2>Using Togl With Your Application</H2>
+There are basically two ways of using Togl with your application:
+<ul>
+<li>
+Link or "compile in" Togl with your executable or shared library. In this
+case you must call Togl_Init() from your C code to initialize Togl. This
+is the way the included Togl examples are built.</li>
 
-<P>
-The Togl source code is intended to be included with your application.
-You may elect to compile the Togl code into a library file but that's not
-necessary.
-</P>
+<li>
+Compile Togl into a shared library of it's own. In this case, you will
+typically load the Togl shared library into <i>wish</i> and create a blank
+Togl widget, then call functions in your application code (also a compiled
+into a shared library and loaded into <i>wish</i>) to do the OpenGL rendering.
+In this way you can manage redraws and buffer swapping from the Tcl level.</li>
+</ul>
+If you compile Togl into a shared library using the Tcl/Tk stubs-interface
+(use compile flags <tt>-DUSE_TCL_STUBS -DUSE_TK_STUBS</tt> and link with
+<tt>-ltclstub8.x -ltkstub8.x</tt>, this is the default) then the same binary
+can be used with any version of Tck/Tk from 8.06 and up. See <CODE>README.stubs</CODE> for more info.
 
 <H3>Unix/X11 usage</H3>
 
 <P>
 Unix/X systems only need the <CODE>togl.c</CODE>, <CODE>togl.h</CODE>
-and one of of the <CODE>tkInt*.h</CODE> files.
+and the public Tcl/Tk include files.
 </P>
-
 
 <H3>Windows 95/NT usage</H3>
 
 <P>
-Windows 95/NT systems also need the other <CODE>tk*.h</CODE>,
-<CODE>WinMain.c</CODE>, <CODE>winMain.c</CODE>, and <CODE>tkConsole.c</CODE>
-files distributed with Togl.
+Windows 95/NT systems also need <CODE>tkPlatDecls.h</CODE>. This is a public file but due to an installation bug it's is missing from the include directory of Tcl/Tk distributions earlier than 8.4. This file is included with Togl. 
 </P>
 
 <P>
@@ -183,11 +169,13 @@ Also, you'll have to copy the <CODE>tkInt.8.0.h</CODE> file to
 <CODE>tkInt.h</CODE>.
 </P>
 
+
+<H3>Macintosh usage</H3>
+
 <P>
-Togl defines an API of C-callable functions and an API of Tcl-callable
-functions.  The functions are documented here.  See the demo programs
-for examples of how they are used.
+XXX need info
 </P>
+
 
 <BR>
 <A NAME="Cfuncs">
@@ -739,23 +727,24 @@ Option		Default	Comments
 <H2>Demo Programs</H2>
 
 <P>
-There are five demo programs:
+There are six demo programs:
 </P>
 
 <UL>
-<LI>double - compares single vs double buffering with two Togl widgets
-<LI>texture - lets you play with texture mapping options
-<LI>index - demo of using color index mode
-<LI>overlay - example of using overlay planes (requires overlay hardware)
-<LI>stereo - SGI-only stereo example
-<LI>gears - spinning gears demo
+<LI>double.tcl - compares single vs double buffering with two Togl widgets
+<LI>texture.tcl - lets you play with texture mapping options
+<LI>index.tcl - demo of using color index mode
+<LI>overlay.tcl - example of using overlay planes (requires overlay hardware)
+<LI>stereo.tcl - SGI-only stereo example
+<LI>gears.tcl - spinning gears demo
 </UL>
 
 <P>
 To compile the demos, edit the Makefile to suit your system, then
 type "make".
-The stock Makefile is setup for Linux.
-To run a demo just type "double" or "texture" or "index" or "overlay".
+The stock Makefile is setup for Linux. The demos are compiled into
+shared libraries, that can are loaded into the Tcl interpreter as Tcl/Tk-extensions. Demos are started by running the corrsponding tcl script
+To run a demo just type <tt>./double.tcl </tt>or <tt>./texture.tcl</tt> etc.
 </P>
 
 
@@ -799,16 +788,14 @@ this function call will be omitted.
 <H2>Reporting Bugs</H2>
 
 <P>
-If you find a bug in Togl please report it to both Ben and Brian.
+There is a bug database on the
+<A HREF="http://sourceforge.net/project/?form_grp=519">Togl Project Page</A>.
+You may also discuss bugs on the mailing list.
+</P>
+<P>
 When reporting bugs please provide as much information as possible.
 Also, it's very helpful to us if you can provide an example program
 which demonstrates the problem.
-</P>
-
-<P>
-Windows 95/NT problems should be sent to Robert K. Casto
-<A HREF="mailto:casto@cis.ohio-state.edu">casto@cis.ohio-state.edu</A>,
-author of the Windows 95/NT support for Togl.
 </P>
 
 
@@ -875,11 +862,13 @@ author of the Windows 95/NT support for Togl.
 <LI>Added <CODE>-indirect</CODE> config flag
 </UL>
 
-
-
-<H3>Future plans</H3>
+<H3>Version 1.6 - May 7, 2003</H3>
 <UL>
-<LI>Port to the Macintosh (any volunteers?)
+<LI>Added Togl_SetTimerFunc function
+<LI>Updated for Tcl/Tk 8.0.5 and 8.1
+<LI>Context sharing added for Windows
+<LI>Macintosh support (by Paul Thiessen)
+<LI>Tcl/Tk stubs support - see README.tcl (by Jonas Beskow)
 </UL>
 
 
@@ -899,6 +888,8 @@ Several people have contributed new features to Togl.  Among them are:
 <LI>Robert Casto - Windows NT port
 <LI>Geza Groma - Windows 95/NT patches
 <LI>Ben Evans - SGI stereo support
+<LI>Paul Thiessen - Macintosh support
+<LI>Jonas Beskow - Tcl/Tk stubs support
 </UL>
 
 Many others have contributed bug fixes.  Thanks for your contributions!
@@ -906,6 +897,6 @@ Many others have contributed bug fixes.  Thanks for your contributions!
 <BR>
 <BR>
 <HR>
-Last edited on September 17, 1998 by Brian Paul.
+Last edited on 20 December 2001 by Jonas Beskow.
 
 </BODY>

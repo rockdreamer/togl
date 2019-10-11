@@ -1,91 +1,30 @@
-/* $Id: togl.c,v 1.45 1998/08/22 03:05:53 brianp Exp $ */
+/* $Id: togl.c,v 1.63 2003/05/07 01:42:05 brianp Exp $ */
 
 /*
  * Togl - a Tk OpenGL widget
- * Version 1.5
- * Copyright (C) 1996-1997  Brian Paul and Ben Bederson
+ * Version 1.6
+ * Copyright (C) 1996-2002  Brian Paul and Ben Bederson
  * See the LICENSE file for copyright details.
  */
 
 
 /*
- * $Log: togl.c,v $
- * Revision 1.45  1998/08/22 03:05:53  brianp
- * added -indirect config option
- *
- * Revision 1.44  1998/05/04 23:42:43  brianp
- * fixed NULL pointer dereference bug in ToglCmdDeletedProc()
- *
- * Revision 1.43  1998/03/12 04:10:47  brianp
- * added display list and OpenGL context sharing options
- *
- * Revision 1.42  1998/03/12 03:20:31  brianp
- * fixed a few overlay update bugs (Yang Guo Liang)
- *
- * Revision 1.41  1998/01/20 01:05:10  brianp
- * added more destroy/clean-up code
- * added a few Tcl 7.4 / Tk 4.0 #if/#else/#endifs (David Laur)
- *
- * Revision 1.40  1997/12/13 02:27:46  brianp
- * only call Tcl_DeleteCommandFromToken() is using Tcl/Tk 8.0 or later
- *
- * Revision 1.39  1997/12/13 02:26:02  brianp
- * test for STEREO to enable SGI stereo code
- * general code clean-up
- *
- * Revision 1.38  1997/12/11 02:21:18  brianp
- * added support for Tcl/Tk 8.0p2
- *
- * Revision 1.37  1997/11/15 04:11:30  brianp
- * added Adrian J. Chung's widget destroy code
- *
- * Revision 1.36  1997/11/15 03:33:13  brianp
- * fixed multi-expose/redraw problem (Andy Colebourne)
- *
- * Revision 1.35  1997/11/15 03:28:42  brianp
- * removed code in Togl_Configure(), added for stereo, that caused a new bug
- *
- * Revision 1.34  1997/11/15 02:58:48  brianp
- * added Togl_TkWin() per Glenn Lewis
- *
- * Revision 1.33  1997/10/01 02:50:57  brianp
- * added SGI stereo functions from Ben Evans
- *
- * Revision 1.32  1997/10/01 00:25:22  brianp
- * made small change for HP compilation (Glenn Lewis)
- *
- * Revision 1.31  1997/09/17 02:41:07  brianp
- * added Geza Groma's Windows NT/95 patches
- *
- * Revision 1.30  1997/09/12 01:21:05  brianp
- * a few more tweaks for Windows compilation
+ * Currently we support X11, Win32 and Macintosh only
  */
-
-
-/*
- * Currently support X11 and WIN32
- */
-#ifndef WIN32
+#if !defined(WIN32) && !defined(macintosh)
 #define X11
 #endif
 
 
 /*** Windows headers ***/
-#ifdef WIN32
+#if defined(WIN32) && !defined(X11) && !defined(macintosh)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #undef WIN32_LEAN_AND_MEAN
 #include <winnt.h>
-#endif /* WIN32 */
-
-/*** Standard C headers ***/
-#include <assert.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 /*** X Window System headers ***/
-#ifdef X11
+#elif defined(X11) && !defined(WIN32) && !defined(macintosh)
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/Xatom.h>  /* for XA_RGB_DEFAULT_MAP atom */
@@ -95,40 +34,79 @@
 #include <X11/Xmu/StdCmap.h>  /* for XmuLookupStandardColormap */
 #endif
 #include <GL/glx.h>
-#endif /*X11*/
 
-/*** Tcl/Tk headers ***/
-#ifdef X11
-#ifndef _TKPORT
-#define _TKPORT  /* This eliminates need to include a bunch of Tk baggage */
-#endif /* X11 */
+/*** Mac headers ***/
+#elif defined(macintosh) && !defined(WIN32) && !defined(X11)
+#include <Gestalt.h>
+#include <Traps.h>
+#include <agl.h>
+#include <tclMacCommonPch.h>
+
+#else                           /* make sure only one platform defined */
+#error Unsupported platform, or confused platform defines...
 #endif
+
+/*** Standard C headers ***/
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include <tcl.h>
-#include <tk.h>
-#if defined(X11)
-#if TK_MAJOR_VERSION==4 && TK_MINOR_VERSION==0
-#  include "tkInt4.0.h"
-#  define NO_TK_CURSOR
-#elif TK_MAJOR_VERSION==4 && TK_MINOR_VERSION==1
-#  include "tkInt4.1.h"
-#elif TK_MAJOR_VERSION==4 && TK_MINOR_VERSION==2
-#  include "tkInt4.2.h"
-#elif TK_MAJOR_VERSION==8 && TK_MINOR_VERSION==0 && TK_RELEASE_SERIAL==0
-#  include "tkInt8.0.h"
-#elif TK_MAJOR_VERSION==8 && TK_MINOR_VERSION==0 && TK_RELEASE_SERIAL==2
-#  include "tkInt8.0p2.h"
+#ifdef USE_LOCAL_TK_H
+  #include "tk8.4a3.h"
 #else
-   Sorry, you will have to edit togl.c to include the right tkInt.h file
+  #include <tk.h>
 #endif
-#elif defined(WIN32)
-#if TK_MAJOR_VERSION<8
-   Sorry Windows version requires Tcl/Tk ver 8.0 or higher.
-#endif
-#include "tkInt.h"
-#include "tkWinInt.h"
-#endif /* X11 */
-#include "togl.h"
 
+#ifdef WIN32
+#  include <tkPlatDecls.h>
+#endif
+
+#if TK_MAJOR_VERSION<8
+#  error Sorry Togl requires Tcl/Tk ver 8.0 or higher.
+#endif
+
+#if defined(macintosh)
+#  if TK_MAJOR_VERSION<8 || TK_MINOR_VERSION<3
+#    error Sorry Mac version requires Tcl/Tk ver 8.3.0 or higher.
+#  endif
+#endif /* Mac */
+
+/* workaround for bug #123153 in tcl ver8.4a2 (tcl.h) */
+#if defined(Tcl_InitHashTable) && defined(USE_TCL_STUBS)
+#undef Tcl_InitHashTable
+#define Tcl_InitHashTable (tclStubsPtr->tcl_InitHashTable)
+#endif
+#if (TK_MAJOR_VERSION>=8 && TK_MINOR_VERSION>=4)
+#  define HAVE_TK_SETCLASSPROCS
+/* pointer to Tk_SetClassProcs function in the stub table */
+
+static void (*SetClassProcsPtr) _ANSI_ARGS_((Tk_Window, Tk_ClassProcs*,ClientData));
+#endif
+
+/*
+ * Copy of TkClassProcs declarations form tkInt.h
+ * (this is needed for Tcl ver =< 8.4a3)
+ */
+
+typedef int (TkBindEvalProc) _ANSI_ARGS_((ClientData clientData,
+	Tcl_Interp *interp, XEvent *eventPtr, Tk_Window tkwin,
+	KeySym keySym));
+typedef void (TkBindFreeProc) _ANSI_ARGS_((ClientData clientData));
+typedef Window (TkClassCreateProc) _ANSI_ARGS_((Tk_Window tkwin,
+	Window parent, ClientData instanceData));
+typedef void (TkClassGeometryProc) _ANSI_ARGS_((ClientData instanceData));
+typedef void (TkClassModalProc) _ANSI_ARGS_((Tk_Window tkwin,
+	XEvent *eventPtr));
+typedef struct TkClassProcs {
+  TkClassCreateProc *createProc;
+  TkClassGeometryProc *geometryProc;
+  TkClassModalProc *modalProc;
+} TkClassProcs;
+
+
+#include "togl.h"
 
 
 /* Defaults */
@@ -140,20 +118,60 @@
 
 
 #ifdef WIN32
-/* maximum size of a logical palette corresponding to a colormap in color index mode */
+/* Maximum size of a logical palette corresponding to a colormap
+ * in color index mode.
+ */
 #define MAX_CI_COLORMAP_SIZE 4096
+
+/* 
+ * copy of TkWinColormap from tkWinInt.h 
+ */
+
+typedef struct {
+    HPALETTE palette;		/* Palette handle used when drawing. */
+    UINT size;			/* Number of entries in the palette. */
+    int stale;			/* 1 if palette needs to be realized,
+				 * otherwise 0.  If the palette is stale,
+				 * then an idle handler is scheduled to
+				 * realize the palette. */
+    Tcl_HashTable refCounts;	/* Hash table of palette entry reference counts
+				 * indexed by pixel value. */
+} TkWinColormap;
+
+static LRESULT (CALLBACK *tkWinChildProc)(HWND hwnd, UINT message,
+				 WPARAM wParam, LPARAM lParam) = NULL;
+
+#define TK_WIN_CHILD_CLASS_NAME "TkChild"
+
 #endif /* WIN32 */
+
 
 #define MAX(a,b)	(((a)>(b))?(a):(b))
 
-#define TCL_ERR(interp, string) {Tcl_ResetResult(interp);		\
-			         Tcl_AppendResult(interp, string, NULL);\
-				 return(TCL_ERROR);}
+#define TCL_ERR(interp, string)			\
+   do {						\
+      Tcl_ResetResult(interp);			\
+      Tcl_AppendResult(interp, string, NULL);	\
+      return TCL_ERROR;				\
+   } while (0)
 
-#define ALL_EVENTS_MASK \
-    KeyPressMask|KeyReleaseMask|ButtonPressMask|ButtonReleaseMask|	\
-    EnterWindowMask|LeaveWindowMask|PointerMotionMask|ExposureMask|	\
-    VisibilityChangeMask|FocusChangeMask|PropertyChangeMask|ColormapChangeMask
+/* The constant DUMMY_WINDOW is used to signal window creation 
+   failure from the Togl_CreateWindow() */
+#define DUMMY_WINDOW -1
+
+#define ALL_EVENTS_MASK 	\
+   (KeyPressMask |		\
+    KeyReleaseMask |		\
+    ButtonPressMask |		\
+    ButtonReleaseMask |		\
+    EnterWindowMask |		\
+    LeaveWindowMask |		\
+    PointerMotionMask |		\
+    ExposureMask |		\
+    VisibilityChangeMask |	\
+    FocusChangeMask |		\
+    PropertyChangeMask |	\
+    ColormapChangeMask)
 
 
 struct Togl
@@ -166,7 +184,10 @@ struct Togl
    int CiColormapSize;          /* (Maximum) size of colormap in color index mode */
 #elif defined(X11)
    GLXContext GlCtx;		/* Normal planes GLX context */
+#elif defined(macintosh)
+   AGLContext aglCtx;
 #endif /* WIN32 */
+
    Display *display;		/* X's token for the window's display. */
    Tk_Window  TkWin;		/* Tk window structure */
    Tcl_Interp *Interp;		/* Tcl interpreter */
@@ -175,7 +196,7 @@ struct Togl
    Tk_Cursor Cursor;		/* The widget's cursor */
 #endif
    int Width, Height;		/* Dimensions of window */
-   int Time;			/* Time value for timer */
+   int TimerInterval;		/* Time interval for timer in milliseconds */
 #if (TCL_MAJOR_VERSION * 100 + TCL_MINOR_VERSION) >= 705
    Tcl_TimerToken timerHandler; /* Token for togl's timer handler */
 #else
@@ -222,6 +243,7 @@ struct Togl
 #elif defined(WIN32)
    HGLRC tglGLOverlayHglrc;
 #endif /* X11 */
+
    Window OverlayWindow;		/* The overlay window, or 0 */
    Togl_Callback *OverlayDisplayProc;	/* Overlay redraw proc */
    GLboolean OverlayUpdatePending;	/* Should overlay be redrawn? */
@@ -246,7 +268,7 @@ struct Togl
 static int Togl_Cmd(ClientData clientData, Tcl_Interp *interp,
                     int argc, char **argv);
 static void Togl_EventProc(ClientData clientData, XEvent *eventPtr);
-static int Togl_MakeWindowExist(struct Togl *togl);
+static Window Togl_CreateWindow(Tk_Window, Window, ClientData);
 #ifdef MESA_COLOR_HACK
 static int get_free_color_cells( Display *display, int screen,
                                  Colormap colormap);
@@ -262,6 +284,9 @@ static void stereoMakeCurrent( Display *dpy, Window win, GLXContext ctx );
 static void stereoInit( struct Togl *togl,int stereoEnabled );
 #endif
 
+#ifdef macintosh
+static void SetMacBufRect(struct Togl *togl);
+#endif
 
 
 /*
@@ -341,7 +366,7 @@ static Tk_ConfigSpec configSpecs[] = {
 #endif
 
     {TK_CONFIG_INT, "-time", "time", "Time",
-     DEFAULT_TIME, Tk_Offset(struct Togl, Time), 0, NULL},
+     DEFAULT_TIME, Tk_Offset(struct Togl, TimerInterval), 0, NULL},
 
     {TK_CONFIG_STRING, "-sharelist", "sharelist", "ShareList",
      NULL, Tk_Offset(struct Togl, ShareList), 0, NULL},
@@ -360,17 +385,23 @@ static Tk_ConfigSpec configSpecs[] = {
 };
 
 
-static Togl_Callback *CreateProc = NULL;
-static Togl_Callback *DisplayProc = NULL;
-static Togl_Callback *ReshapeProc = NULL;
-static Togl_Callback *DestroyProc = NULL;
-static Togl_Callback *OverlayDisplayProc = NULL;
-static Togl_Callback *TimerProc = NULL;
+/*
+ * Default callback pointers.  When a new Togl widget is created it
+ * will be assigned these initial callbacks.
+ */
+static Togl_Callback *DefaultCreateProc = NULL;
+static Togl_Callback *DefaultDisplayProc = NULL;
+static Togl_Callback *DefaultReshapeProc = NULL;
+static Togl_Callback *DefaultDestroyProc = NULL;
+static Togl_Callback *DefaultOverlayDisplayProc = NULL;
+static Togl_Callback *DefaultTimerProc = NULL;
 static ClientData DefaultClientData = NULL;
 static Tcl_HashTable CommandTable;
 
-static struct Togl *ToglHead = NULL;  /* head of linked list */
-
+/*
+ * Head of linked list of all Togl widgets
+ */
+static struct Togl *ToglHead = NULL;
 
 /*
  * Add given togl widget to linked list.
@@ -429,23 +460,26 @@ static struct Togl *FindTogl(const char *ident)
  * Return:  an X Colormap or 0 if there's a _serious_ error.
  */
 static Colormap
-get_rgb_colormap( Display *dpy, int scrnum, const XVisualInfo *visinfo )
+get_rgb_colormap( Display *dpy,
+                  int scrnum,
+                  const XVisualInfo *visinfo,
+                  Tk_Window tkwin)
 {
    Atom hp_cr_maps;
    Status status;
    int numCmaps;
    int i;
    XStandardColormap *standardCmaps;
-   Window root = RootWindow(dpy,scrnum);
+   Window root = XRootWindow(dpy,scrnum);
    int using_mesa;
 
    /*
     * First check if visinfo's visual matches the default/root visual.
     */
-   if (visinfo->visual==DefaultVisual(dpy,scrnum)) {
+   if (visinfo->visual==Tk_Visual(tkwin)) {
       /* use the default/root colormap */
       Colormap cmap;
-      cmap = DefaultColormap( dpy, scrnum );
+      cmap = Tk_Colormap(tkwin);
 #ifdef MESA_COLOR_HACK
       (void) get_free_color_cells( dpy, scrnum, cmap);
 #endif
@@ -495,6 +529,7 @@ get_rgb_colormap( Display *dpy, int scrnum, const XVisualInfo *visinfo )
    /*
     * Next, try to find a standard X colormap.
     */
+#if !HP && !SUN
 #ifndef SOLARIS_BUG
    status = XmuLookupStandardColormap( dpy, visinfo->screen,
 				       visinfo->visualid, visinfo->depth,
@@ -514,6 +549,7 @@ get_rgb_colormap( Display *dpy, int scrnum, const XVisualInfo *visinfo )
          XFree(standardCmaps);
       }
    }
+#endif
 #endif
 
    /*
@@ -672,19 +708,40 @@ static Colormap Win32CreateCiColormap(struct Togl *togl)
  */
 int Togl_Init(Tcl_Interp *interp)
 {
-   /* The Tcl_PkgProvide() function isn't available in Tcl 7.4 or earlier */
-#if (TCL_MAJOR_VERSION * 100 + TCL_MINOR_VERSION) > 704
-   /* The following allows Togl to be loaded dynamically into a running
-    * tclsh, if togl is made into a shared lib.  Contributed by Kerel
-    * Zuiderveld (karel.zuiderveld@cv.ruu.nl)
-    */
-   if (Tcl_PkgProvide(interp, "Togl", TOGL_VERSION) != TCL_OK) {
-      return TCL_ERROR;
+   int major,minor,patchLevel,releaseType;
+
+#ifdef USE_TCL_STUBS
+   if (Tcl_InitStubs(interp, "8.1", 0) == NULL) {return TCL_ERROR;}
+#endif
+#ifdef USE_TK_STUBS
+   if (Tk_InitStubs(interp, "8.1", 0) == NULL) {return TCL_ERROR;}
+#endif
+
+   /* Skip all this on Tcl/Tk 8.0 or older.  Seems to work */
+#if TCL_MAJOR_VERSION * 100 + TCL_MINOR_VERSION > 800
+   Tcl_GetVersion(&major,&minor,&patchLevel,&releaseType);
+
+#ifdef HAVE_TK_SETCLASSPROCS
+   if (major >=8 && minor >= 4) {
+     SetClassProcsPtr = tkStubsPtr->tk_SetClassProcs;
+   } else {
+     SetClassProcsPtr = NULL;
+   }
+#else
+   if (major >= 8 && minor >= 4) {
+     TCL_ERR(interp,"Sorry, this instance of Togl was not compiled to work with Tcl/Tk 8.4 or higher.");
    }
 #endif
 
-   Tcl_CreateCommand(interp, "togl", Togl_Cmd,
+#endif
+
+   if (Tcl_PkgProvide(interp, "Togl", TOGL_VERSION) != TCL_OK) {
+      return TCL_ERROR;
+   }
+
+   Tcl_CreateCommand(interp, "togl", (Tcl_CmdProc *)Togl_Cmd,
                      (ClientData) Tk_MainWindow(interp), NULL);
+
    Tcl_InitHashTable(&CommandTable, TCL_STRING_KEYS);
 
    return TCL_OK;
@@ -696,7 +753,7 @@ int Togl_Init(Tcl_Interp *interp)
  */
 void Togl_CreateFunc( Togl_Callback *proc )
 {
-   CreateProc = proc;
+   DefaultCreateProc = proc;
 }
 
 
@@ -705,7 +762,7 @@ void Togl_CreateFunc( Togl_Callback *proc )
  */
 void Togl_DisplayFunc( Togl_Callback *proc )
 {
-   DisplayProc = proc;
+   DefaultDisplayProc = proc;
 }
 
 
@@ -714,7 +771,7 @@ void Togl_DisplayFunc( Togl_Callback *proc )
  */
 void Togl_ReshapeFunc( Togl_Callback *proc )
 {
-   ReshapeProc = proc;
+   DefaultReshapeProc = proc;
 }
 
 
@@ -723,7 +780,7 @@ void Togl_ReshapeFunc( Togl_Callback *proc )
  */
 void Togl_DestroyFunc( Togl_Callback *proc )
 {
-   DestroyProc = proc;
+   DefaultDestroyProc = proc;
 }
 
 
@@ -732,7 +789,7 @@ void Togl_DestroyFunc( Togl_Callback *proc )
  */
 void Togl_TimerFunc( Togl_Callback *proc )
 {
-   TimerProc = proc;
+   DefaultTimerProc = proc;
 }
 
 
@@ -741,12 +798,12 @@ void Togl_TimerFunc( Togl_Callback *proc )
  */
 void Togl_ResetDefaultCallbacks( void )
 {
-   CreateProc = NULL;
-   DisplayProc = NULL;
-   ReshapeProc = NULL;
-   DestroyProc = NULL;
-   OverlayDisplayProc = NULL;
-   TimerProc = NULL;
+   DefaultCreateProc = NULL;
+   DefaultDisplayProc = NULL;
+   DefaultReshapeProc = NULL;
+   DefaultDestroyProc = NULL;
+   DefaultOverlayDisplayProc = NULL;
+   DefaultTimerProc = NULL;
    DefaultClientData = NULL;
 }
 
@@ -795,15 +852,42 @@ void Togl_SetDestroyFunc( struct Togl *togl, Togl_Callback *proc )
 static void Togl_Timer( ClientData clientData )
 {
    struct Togl *togl = (struct Togl *) clientData;
-   togl->TimerProc(togl);
+   if (togl->TimerProc) {
+      togl->TimerProc(togl);
+
+      /* Re-register this callback since Tcl/Tk timers are "one-shot".
+       * That is, after the timer callback is called it not normally
+       * called again.  That's not the behavior we want for Togl.
+       */
 #if (TK_MAJOR_VERSION * 100 + TK_MINOR_VERSION) >= 401
-   togl->timerHandler =
-       Tcl_CreateTimerHandler( togl->Time, Togl_Timer, (ClientData)togl );
+      togl->timerHandler =
+         Tcl_CreateTimerHandler( togl->TimerInterval, Togl_Timer, (ClientData)togl );
 #else
-   togl->timerHandler =
-       Tk_CreateTimerHandler( togl->Time, Togl_Timer, (ClientData)togl );
+      togl->timerHandler =
+         Tk_CreateTimerHandler( togl->TimeInterval, Togl_Timer, (ClientData)togl );
 #endif
+   }
 }
+
+
+/*
+ * Change the timer callback for a specific Togl widget.
+ * Pass NULL to disable the callback.
+ */
+void Togl_SetTimerFunc( struct Togl *togl, Togl_Callback *proc )
+{
+   togl->TimerProc = proc;
+   if (proc) {
+#if (TK_MAJOR_VERSION * 100 + TK_MINOR_VERSION) >= 401
+      togl->timerHandler =
+         Tcl_CreateTimerHandler( togl->TimerInterval, Togl_Timer, (ClientData)togl );
+#else
+      togl->timerHandler =
+         Tk_CreateTimerHandler( togl->TimeInterval, Togl_Timer, (ClientData)togl );
+#endif
+   }
+}
+
 
 
 /*
@@ -833,6 +917,7 @@ void Togl_MakeCurrent( const struct Togl *togl )
 #if defined(WIN32)
    int res = wglMakeCurrent(togl->tglGLHdc, togl->tglGLHglrc);
    assert(res == TRUE);
+
 #elif defined(X11)
    glXMakeCurrent( Tk_Display(togl->TkWin),
                    Tk_WindowId(togl->TkWin),
@@ -842,9 +927,31 @@ void Togl_MakeCurrent( const struct Togl *togl )
                       Tk_WindowId(togl->TkWin),
                       togl->GlCtx );
 #endif /*__sgi STEREO */
+
+#elif defined(macintosh)
+   aglSetCurrentContext(togl->aglCtx);
 #endif /* WIN32 */
 }
 
+
+#ifdef macintosh
+/* tell OpenGL which part of the Mac window to render to */
+static void SetMacBufRect(struct Togl *togl)
+{
+   GLint wrect[4];
+
+   /* set wrect[0,1] to lower left corner of widget */
+   wrect[2] = ((TkWindow *) (togl->TkWin))->changes.width;
+   wrect[3] = ((TkWindow *) (togl->TkWin))->changes.height;
+   wrect[0] = ((TkWindow *) (togl->TkWin))->privatePtr->xOff;
+   wrect[1] =
+       ((TkWindow *) (togl->TkWin))->privatePtr->toplevel->portPtr->portRect.bottom -
+       wrect[3] - ((TkWindow *) (togl->TkWin))->privatePtr->yOff;
+   aglSetInteger(togl->aglCtx, AGL_BUFFER_RECT, wrect);
+   aglEnable(togl->aglCtx, AGL_BUFFER_RECT);
+   aglUpdateContext(togl->aglCtx);
+}
+#endif
 
 /*
  * Called when the widget's contents must be redrawn.  Basically, we
@@ -858,8 +965,49 @@ static void Togl_Render( ClientData clientData )
    struct Togl *togl = (struct Togl *)clientData;
 
    if (togl->DisplayProc) {
+
+#ifdef macintosh
+      /* Mac is complicated here because OpenGL needs to know what part of the parent
+         window to render into, and it seems that region need to be invalidated before
+         drawing, so that QuickDraw will allow OpenGL to transfer pixels into that
+         part of the window. I'm not even totally sure how or why this works as it
+         does, since this aspect of Mac OpenGL seems to be totally undocumented.
+         This was put together by trial and error! (thiessen) */
+      MacRegion r;
+      RgnPtr rp = &r;
+      GrafPtr curPort, parentWin;
+      parentWin = (GrafPtr)
+         (((MacDrawable *) (Tk_WindowId(togl->TkWin)))->toplevel->portPtr);
+      if (!parentWin) return;
+#endif
+
       Togl_MakeCurrent(togl);
+
+#ifdef macintosh
+      /* Set QuickDraw port and clipping region */
+      GetPort(&curPort);
+      SetPort(parentWin);
+      r.rgnBBox.left = ((TkWindow *) (togl->TkWin))->privatePtr->xOff;
+      r.rgnBBox.right =
+          r.rgnBBox.left + ((TkWindow *) (togl->TkWin))->changes.width - 1;
+      r.rgnBBox.top = ((TkWindow *) (togl->TkWin))->privatePtr->yOff;
+      r.rgnBBox.bottom =
+          r.rgnBBox.top + ((TkWindow *) (togl->TkWin))->changes.height - 1;
+      r.rgnSize = sizeof(Region);
+      InvalRgn(&rp);
+      SetClip(&rp);
+      /* this may seem an odd place to put this, with possibly redundant calls to
+         aglSetInteger(AGL_BUFFER_RECT...), but for some reason performance is actually
+         a lot better if this is called before every render... */
+      SetMacBufRect(togl);
+#endif
+
       togl->DisplayProc(togl);
+
+#ifdef macintosh
+      SetPort(curPort);         /* restore previous port */
+#endif
+
    }
    togl->UpdatePending = GL_FALSE;
 }
@@ -870,9 +1018,11 @@ static void RenderOverlay( ClientData clientData )
    struct Togl *togl = (struct Togl *)clientData;
 
    if (togl->OverlayFlag && togl->OverlayDisplayProc) {
+
 #if defined(WIN32)
       int res = wglMakeCurrent(togl->tglGLHdc, togl->tglGLHglrc);
       assert(res == TRUE);
+
 #elif defined(X11)
       glXMakeCurrent( Tk_Display(togl->TkWin),
 		      togl->OverlayWindow,
@@ -880,9 +1030,11 @@ static void RenderOverlay( ClientData clientData )
 #if defined(__sgi) && defined(STEREO)
       stereoMakeCurrent( Tk_Display(togl->TkWin),
                          togl->OverlayWindow,
-                         togl->OverlayCtx );	
-#endif /*__sgi STEREO */	
+                         togl->OverlayCtx );
+#endif /*__sgi STEREO */
+
 #endif /* WIN32 */
+
       togl->OverlayDisplayProc(togl);
    }
    togl->OverlayUpdatePending = GL_FALSE;
@@ -915,11 +1067,32 @@ int Togl_Configure(Tcl_Interp *interp, struct Togl *togl,
    int oldAuxNumber   = togl->AuxNumber;
 
    if (Tk_ConfigureWidget(interp, togl->TkWin, configSpecs,
-                          argc, argv, (char *)togl, flags) == TCL_ERROR) {
+                          argc, (char **)argv, (char *)togl, flags) == TCL_ERROR) {
       return(TCL_ERROR);
    }
+#ifndef USE_OVERLAY
+   if (togl->OverlayFlag) {
+     TCL_ERR(interp,"Sorry, overlay was disabled");
+   }
+#endif
+   
 
    Tk_GeometryRequest(togl->TkWin, togl->Width, togl->Height);
+   /* this added per Lou Arata <arata@enya.picker.com> */
+   Tk_ResizeWindow(togl->TkWin, togl->Width, togl->Height);
+
+   if (togl->ReshapeProc &&
+#if defined(WIN32)
+       togl->tglGLHglrc
+#elif defined(X11)
+       togl->GlCtx
+#elif defined(macintosh)
+       togl->aglCtx
+#endif
+       ) {
+      Togl_MakeCurrent(togl);
+      togl->ReshapeProc(togl);
+   }
 
    if (togl->RgbaFlag != oldRgbaFlag
        || togl->RgbaRed != oldRgbaRed
@@ -942,10 +1115,6 @@ int Togl_Configure(Tcl_Interp *interp, struct Togl *togl,
       free_default_color_cells( Tk_Display(togl->TkWin),
                                 Tk_Colormap(togl->TkWin) );
 #endif
-      /* Have to recreate the window and GLX context */
-      if (Togl_MakeWindowExist(togl)==TCL_ERROR) {
-         return TCL_ERROR;
-      }
    }
 
 #if defined(__sgi) && defined(STEREO)
@@ -1010,6 +1179,36 @@ int Togl_Widget(ClientData clientData, Tcl_Interp *interp,
    else if (!strncmp(argv[1], "makecurrent", MAX(1, strlen(argv[1])))) {
       /* force the widget to be redrawn */
       Togl_MakeCurrent(togl);
+   }
+   else if (!strncmp(argv[1], "loadbitmapfont", MAX(1, strlen(argv[1])))){
+      if (argc == 3){
+         GLuint fontbase;
+         Tcl_Obj * fontbaseAsTclObject;
+         fontbase = Togl_LoadBitmapFont(togl,argv[2]);
+         if (fontbase) {
+            fontbaseAsTclObject = Tcl_NewIntObj(fontbase);
+            Tcl_SetObjResult(interp, fontbaseAsTclObject);
+            result = TCL_OK;
+         }
+         else {
+            Tcl_AppendResult(interp, "Could not allocate font",NULL);
+            result = TCL_ERROR;
+         }
+      }
+      else {
+         Tcl_AppendResult(interp, "wrong # args",NULL);
+         result=TCL_ERROR;
+      }
+   }
+   else if (!strncmp(argv[1], "unloadbitmapfont", MAX(1, strlen(argv[1])))) {
+      if (argc == 3) {
+         Togl_UnloadBitmapFont(togl, atoi(argv[2]));
+         result = TCL_OK;
+      }
+      else {
+         Tcl_AppendResult(interp, "wrong # args",NULL);
+         result = TCL_ERROR;
+      }
    }
    else {
       /* Probably a user-defined function */
@@ -1084,6 +1283,8 @@ static int Togl_Cmd(ClientData clientData, Tcl_Interp *interp,
 #elif defined(X11)
    togl->GlCtx = NULL;
    togl->OverlayCtx = NULL;
+#elif defined(macintosh)
+   togl->aglCtx = NULL;
 #endif /* WIN32 */
    togl->display = Tk_Display( tkwin );
    togl->TkWin = tkwin;
@@ -1093,7 +1294,7 @@ static int Togl_Cmd(ClientData clientData, Tcl_Interp *interp,
 #endif
    togl->Width = 0;
    togl->Height = 0;
-   togl->Time = 0;
+   togl->TimerInterval = 0;
    togl->RgbaFlag = 1;
    togl->RgbaRed = 1;
    togl->RgbaGreen = 1;
@@ -1116,12 +1317,12 @@ static int Togl_Cmd(ClientData clientData, Tcl_Interp *interp,
    togl->Indirect = GL_FALSE;
    togl->UpdatePending = GL_FALSE;
    togl->OverlayUpdatePending = GL_FALSE;
-   togl->CreateProc = CreateProc;
-   togl->DisplayProc = DisplayProc;
-   togl->ReshapeProc = ReshapeProc;
-   togl->DestroyProc = DestroyProc;
-   togl->TimerProc = TimerProc;
-   togl->OverlayDisplayProc = OverlayDisplayProc;
+   togl->CreateProc = DefaultCreateProc;
+   togl->DisplayProc = DefaultDisplayProc;
+   togl->ReshapeProc = DefaultReshapeProc;
+   togl->DestroyProc = DefaultDestroyProc;
+   togl->TimerProc = DefaultTimerProc;
+   togl->OverlayDisplayProc = DefaultOverlayDisplayProc;
    togl->ShareList = NULL;
    togl->ShareContext = NULL;
    togl->Ident = NULL;
@@ -1133,8 +1334,50 @@ static int Togl_Cmd(ClientData clientData, Tcl_Interp *interp,
 
    /* Create command event handler */
    togl->widgetCmd = Tcl_CreateCommand(interp, Tk_PathName(tkwin),
-				       Togl_Widget, (ClientData)togl,
+				       (Tcl_CmdProc *)      Togl_Widget, 
+				       (ClientData)         togl,
 				       (Tcl_CmdDeleteProc*) ToglCmdDeletedProc);
+   /*
+     Setup the Tk_ClassProcs callbacks to point at our 
+     own window creation function
+
+     We need to check at runtime if we should use the new 
+     Tk_SetClassProcs() API or if we need to modify the window 
+     structure directly
+   */
+
+
+#ifdef HAVE_TK_SETCLASSPROCS
+
+   if (SetClassProcsPtr != NULL) {        /* use public API (Tk 8.4+) */
+     Tk_ClassProcs *procsPtr;
+     procsPtr = (Tk_ClassProcs*) Tcl_Alloc(sizeof(Tk_ClassProcs));
+     procsPtr->size             = sizeof(Tk_ClassProcs);
+     procsPtr->createProc       = Togl_CreateWindow;
+     procsPtr->worldChangedProc = NULL;
+     procsPtr->modalProc        = NULL;
+     /*      Tk_SetClassProcs(togl->TkWin,procsPtr,(ClientData)togl); */
+     (SetClassProcsPtr)(togl->TkWin,procsPtr,(ClientData)togl);
+   }
+   else 
+#endif
+     {                                  /* use private API */
+       /* 
+	  We need to set these fields in the Tk_FakeWin structure:
+	  dummy17 = classProcsPtr
+	  dummy18 = instanceData
+       */
+       TkClassProcs *procsPtr;
+       Tk_FakeWin *winPtr = (Tk_FakeWin*)(togl->TkWin);
+       
+       procsPtr = (TkClassProcs*)Tcl_Alloc(sizeof(TkClassProcs));
+       procsPtr->createProc     = Togl_CreateWindow;
+       procsPtr->geometryProc   = NULL;
+       procsPtr->modalProc      = NULL;
+       winPtr->dummy17 = (char*)procsPtr;
+       winPtr->dummy18 = (ClientData)togl;
+     }
+   
    Tk_CreateEventHandler(tkwin,
                          ExposureMask | StructureNotifyMask,
                          Togl_EventProc,
@@ -1151,19 +1394,26 @@ static int Togl_Cmd(ClientData clientData, Tcl_Interp *interp,
     * create it now.  We can tell by checking if the GLX context has
     * been initialized.
     */
+   if (!
 #if defined(WIN32)
-   if (!togl->tglGLHdc) {
+       togl->tglGLHdc
 #elif defined(X11)
-   if (!togl->GlCtx) {
-#endif /* WIN32 */
-      if (Togl_MakeWindowExist(togl) == TCL_ERROR) {
-         goto error;
-      }
-   }
-
+       togl->GlCtx
+#elif defined(macintosh)
+       togl->aglCtx
+#endif
+       ) 
+     {
+       Tk_MakeWindowExist(togl->TkWin);
+       if (Tk_WindowId(togl->TkWin)==DUMMY_WINDOW) {
+	 return TCL_ERROR;
+       }
+       Togl_MakeCurrent(togl);
+     }
+   
    /* If defined, call create callback */
    if (togl->CreateProc) {
-      togl->CreateProc(togl);
+     togl->CreateProc(togl);
    }
 
    /* If defined, call reshape proc */
@@ -1173,7 +1423,7 @@ static int Togl_Cmd(ClientData clientData, Tcl_Interp *interp,
 
    /* If defined, setup timer */
    if (togl->TimerProc){
-      Tk_CreateTimerHandler( togl->Time, Togl_Timer, (ClientData)togl );
+      Tk_CreateTimerHandler( togl->TimerInterval, Togl_Timer, (ClientData)togl );
    }
 
    Tcl_AppendResult(interp, Tk_PathName(tkwin), NULL);
@@ -1190,6 +1440,7 @@ error:
 }
 
 
+#ifdef USE_OVERLAY
 
 /*
  * Do all the setup for overlay planes
@@ -1224,7 +1475,7 @@ static int SetupOverlay( struct Togl *togl )
 
    dpy = Tk_Display(togl->TkWin);
 
-   visinfo = glXChooseVisual( dpy, DefaultScreen(dpy), ovAttributeList );
+   visinfo = glXChooseVisual( dpy, Tk_ScreenNumber(winPtr), ovAttributeList );
    if (!visinfo){
       Tcl_AppendResult(togl->Interp,Tk_PathName(winPtr),
                        ": No suitable overlay index visual available",
@@ -1254,7 +1505,7 @@ static int SetupOverlay( struct Togl *togl )
    togl->OverlayCtx = glXCreateContext( dpy, visinfo,
                                         togl->GlCtx, !togl->Indirect );
 
-   swa.colormap = XCreateColormap( dpy, RootWindow(dpy, visinfo->screen),
+   swa.colormap = XCreateColormap( dpy, XRootWindow(dpy, visinfo->screen),
                                    visinfo->visual, AllocNone );
    togl->OverlayCmap = swa.colormap;
 
@@ -1279,12 +1530,15 @@ static int SetupOverlay( struct Togl *togl )
 
    return TCL_OK;
 
-#elif defined(WIN32)       /* not yet implemented on Windows*/
+#elif defined(WIN32) || defined(macintosh) /* not yet implemented on these */
 
    return TCL_ERROR;
 
 #endif /* X11 */
 }
+
+#endif /* USE_OVERLAY */
+
 
 
 #ifdef WIN32
@@ -1296,9 +1550,7 @@ static LRESULT CALLBACK Win32WinProc( HWND hwnd, UINT message,
 {
     LONG result;
     struct Togl *togl = (struct Togl*) GetWindowLong(hwnd, 0);
-    TkWinColormap *cmap;
-    HPALETTE OldPal;
-    UINT i;
+    WNDCLASS childClass;
 
     switch( message ){
     case WM_WINDOWPOSCHANGED:
@@ -1312,9 +1564,25 @@ static LRESULT CALLBACK Win32WinProc( HWND hwnd, UINT message,
         if (togl->tglGLHdc) {
             ReleaseDC(hwnd, togl->tglGLHdc);
         }
+        free(togl);
         break;
     default:
+#if USE_STATIC_LIB
         return TkWinChildProc(hwnd, message, wParam, lParam);
+#else
+        /*
+         * OK, since TkWinChildProc is not explicitly exported in the
+         * dynamic libraries, we have to retrieve it from the class info
+         * registered with windows.
+         *
+         */
+        if (tkWinChildProc == NULL) {
+           GetClassInfo(Tk_GetHINSTANCE(),TK_WIN_CHILD_CLASS_NAME,
+                        &childClass);
+           tkWinChildProc = childClass.lpfnWndProc;
+        }
+        return tkWinChildProc(hwnd, message, wParam, lParam);
+#endif
     }
     result = DefWindowProc(hwnd, message, wParam, lParam);
     Tcl_ServiceAll();
@@ -1325,30 +1593,28 @@ static LRESULT CALLBACK Win32WinProc( HWND hwnd, UINT message,
 
 
 /*
- * Togl_MakeWindowExist
+ * Togl_CreateWindow
  *
- *   Modified version of Tk_MakeWindowExist.
+ *   Window creation function, invoked as a callback from Tk_MakeWindowExist.
  *   Creates an OpenGL window for the Togl widget.
  */
-static int Togl_MakeWindowExist(struct Togl *togl)
-{
-   XVisualInfo *visinfo = NULL;
-   Display *dpy;
-   int dummy;
-   int attrib_list[1000];
-   int attrib_count;
-   TkWindow *winPtr = (TkWindow *) togl->TkWin;
-   TkWindow *winPtr2;
-   Window parent;
-   Colormap cmap;
-   XSetWindowAttributes swa;
-   Tcl_HashEntry *hPtr;
-   int new_flag;
-   int scrnum;
-   int attempt;
-   int directCtx = GL_TRUE;
+static Window Togl_CreateWindow(Tk_Window tkwin,
+				Window parent, 
+				ClientData instanceData) {
+  
+  struct Togl *togl = (struct Togl*) instanceData;
+  XVisualInfo *visinfo = NULL;
+  Display *dpy;
+  Tk_Window *winPtr = (Tk_Window *) togl->TkWin;  Colormap cmap;
+  int scrnum;
+  int directCtx = GL_TRUE;
+  Window window;
 
 #if defined(X11)
+  int attrib_list[1000];
+  int attrib_count;
+  int dummy;
+  XSetWindowAttributes swa;
 #define MAX_ATTEMPTS 12
    static int ci_depths[MAX_ATTEMPTS] = {
       8, 4, 2, 1, 12, 16, 8, 4, 2, 1, 12, 16
@@ -1358,25 +1624,26 @@ static int Togl_MakeWindowExist(struct Togl *togl)
    };
 #elif defined(WIN32)
    HWND hwnd, parentWin;
-   int style, pixelformat;
+   int pixelformat;
    HANDLE hInstance;
    WNDCLASS ToglClass;
    PIXELFORMATDESCRIPTOR pfd;
+   XVisualInfo VisInf;
+#elif defined(macintosh)
+   GLint attribs[20];
+   int na;
+   AGLPixelFormat fmt;
    XVisualInfo VisInf;
 #endif /* X11 */
 
 
    dpy = Tk_Display(togl->TkWin);
 
-   if (winPtr->window != None) {
-      XDestroyWindow(dpy, winPtr->window);
-      winPtr->window = 0;
-   }
-
 #if defined(X11)
    /* Make sure OpenGL's GLX extension supported */
    if (!glXQueryExtension(dpy, &dummy, &dummy)) {
-      TCL_ERR(togl->Interp, "Togl: X server has no OpenGL GLX extension");
+     Tcl_SetResult(togl->Interp, "Togl: X server has no OpenGL GLX extension",TCL_STATIC);
+     return DUMMY_WINDOW;
    }
 
    if (togl->ShareContext && FindTogl(togl->ShareContext)) {
@@ -1390,6 +1657,7 @@ static int Togl_MakeWindowExist(struct Togl *togl)
       printf("SHARE CTX\n");
    }
    else {
+      int attempt;
       /* It may take a few tries to get a visual */
       for (attempt=0; attempt<MAX_ATTEMPTS; attempt++) {
          attrib_count = 0;
@@ -1461,7 +1729,8 @@ static int Togl_MakeWindowExist(struct Togl *togl)
          */
          attrib_list[attrib_count++] = None;
 
-         visinfo = glXChooseVisual( dpy, DefaultScreen(dpy), attrib_list );
+         visinfo = glXChooseVisual(dpy, Tk_ScreenNumber(togl->TkWin),
+                                   attrib_list);
          if (visinfo) {
             /* found a GLX visual! */
             break;
@@ -1471,7 +1740,8 @@ static int Togl_MakeWindowExist(struct Togl *togl)
       togl->VisInfo = visinfo;
 
       if (visinfo==NULL) {
-         TCL_ERR(togl->Interp, "Togl: couldn't get visual");
+	Tcl_SetResult(togl->Interp,"Togl: couldn't get visual",TCL_STATIC);
+	return DUMMY_WINDOW;
       }
 
       /*
@@ -1493,25 +1763,14 @@ static int Togl_MakeWindowExist(struct Togl *togl)
       }
 
       if (togl->GlCtx == NULL) {
-         TCL_ERR(togl->Interp, "could not create rendering context");
+         Tcl_SetResult(togl->Interp, "could not create rendering context",TCL_STATIC);
+	 return DUMMY_WINDOW;
       }
 
    }
 
 
 #endif /* X11 */
-
-   /* Find parent of window */
-   /* Necessary for creation */
-   if ((winPtr->parentPtr == NULL) || (winPtr->flags & TK_TOP_LEVEL)) {
-      parent = XRootWindow(winPtr->display, winPtr->screenNum);
-   }
-   else {
-      if (winPtr->parentPtr->window == None) {
-         Tk_MakeWindowExist((Tk_Window) winPtr->parentPtr);
-      }
-      parent = winPtr->parentPtr->window;
-   }
 
 #ifdef WIN32
    parentWin = Tk_GetHWND(parent);
@@ -1529,7 +1788,8 @@ static int Togl_MakeWindowExist(struct Togl *togl)
        ToglClass.hIcon = NULL;
        ToglClass.hCursor = NULL;
        if (!RegisterClass(&ToglClass)){
-           TCL_ERR(togl->Interp, "unable register Togl window class");
+           Tcl_SetResult(togl->Interp, "unable register Togl window class",TCL_STATIC);
+	   return DUMMY_WINDOW;
        }
    }
 
@@ -1572,36 +1832,62 @@ static int Togl_MakeWindowExist(struct Togl *togl)
    pfd.iLayerType = PFD_MAIN_PLANE;
 
    if ( (pixelformat = ChoosePixelFormat(togl->tglGLHdc, &pfd)) == 0 ) {
-        TCL_ERR(togl->Interp, "Togl: couldn't choose pixel format");
+        Tcl_SetResult(togl->Interp, "Togl: couldn't choose pixel format",TCL_STATIC);
+	return DUMMY_WINDOW;
    }
    if (SetPixelFormat(togl->tglGLHdc, pixelformat, &pfd) == FALSE) {
-        TCL_ERR(togl->Interp, "Togl: couldn't choose pixel format");
+        Tcl_SetResult(togl->Interp, "Togl: couldn't choose pixel format",TCL_STATIC);
+	return DUMMY_WINDOW;
    }
 
    /* Get the actual pixel format */
    DescribePixelFormat(togl->tglGLHdc, pixelformat, sizeof(pfd), &pfd);
 
-   /* Create an OpenGL rendering context */
-   togl->tglGLHglrc = wglCreateContext(togl->tglGLHdc);
-   if (!togl->tglGLHglrc) {
-        TCL_ERR(togl->Interp, "could not create rendering context");
+   if (togl->ShareContext && FindTogl(togl->ShareContext)) {
+      /* share OpenGL context with existing Togl widget */
+      struct Togl *shareWith = FindTogl(togl->ShareContext);
+      assert(shareWith);
+      assert(shareWith->tglGLHglrc);
+      togl->tglGLHglrc = shareWith->tglGLHglrc;
+      togl->VisInfo = shareWith->VisInfo;
+      visinfo = togl->VisInfo;
+   }
+   else {
+      /*
+       * Create a new OpenGL rendering context. And check to share lists.
+       */
+      togl->tglGLHglrc = wglCreateContext(togl->tglGLHdc);
+
+      if (togl->ShareList) {
+         /* share display lists with existing togl widget */
+         struct Togl *shareWith = FindTogl(togl->ShareList);
+         if (shareWith)
+            wglShareLists(shareWith->tglGLHglrc, togl->tglGLHglrc);
+      }
+
+      if (!togl->tglGLHglrc) {
+         Tcl_SetResult(togl->Interp, "could not create rendering context",TCL_STATIC);
+	 return DUMMY_WINDOW;
+      }
+
+      /* Just for portability, define the simplest visinfo */
+      visinfo = &VisInf;
+      visinfo->visual = DefaultVisual(dpy, DefaultScreen(dpy));
+      visinfo->depth = visinfo->visual->bits_per_rgb;
    }
 
-   /* Just for portability, define the simplest visinfo */
-   visinfo = &VisInf;
-   visinfo->visual = DefaultVisual(dpy, DefaultScreen(dpy));
-   visinfo->depth = visinfo->visual->bits_per_rgb;
 #endif /*WIN32 */
 
 
    /*
     * find a colormap
     */
-   scrnum = DefaultScreen(dpy);
+   scrnum = Tk_ScreenNumber(togl->TkWin);
    if (togl->RgbaFlag) {
       /* Colormap for RGB mode */
 #if defined(X11)
-      cmap = get_rgb_colormap( dpy, scrnum, visinfo );
+      cmap = get_rgb_colormap( dpy, scrnum, visinfo, togl->TkWin );
+
 #elif defined(WIN32)
       if (pfd.dwFlags & PFD_NEED_PALETTE) {
          cmap = Win32CreateRgbColormap(pfd);
@@ -1609,11 +1895,22 @@ static int Togl_MakeWindowExist(struct Togl *togl)
       else {
          cmap = DefaultColormap(dpy,scrnum);
       }
-
       /* for EPS Output */
       if ( togl->EpsRedMap) free( ( char *)togl->EpsRedMap);
       if ( togl->EpsGreenMap) free( ( char *)togl->EpsGreenMap);
       if ( togl->EpsBlueMap) free( ( char *)togl->EpsBlueMap);
+      togl->EpsRedMap = togl->EpsGreenMap = togl->EpsBlueMap = NULL;
+      togl->EpsMapSize = 0;
+
+#elif defined(macintosh)
+      cmap = DefaultColormap(dpy, scrnum);
+      /* for EPS Output */
+      if (togl->EpsRedMap)
+         free((char *) togl->EpsRedMap);
+      if (togl->EpsGreenMap)
+         free((char *) togl->EpsGreenMap);
+      if (togl->EpsBlueMap)
+         free((char *) togl->EpsBlueMap);
       togl->EpsRedMap = togl->EpsGreenMap = togl->EpsBlueMap = NULL;
       togl->EpsMapSize = 0;
 #endif /* X11 */
@@ -1629,20 +1926,23 @@ static int Togl_MakeWindowExist(struct Togl *togl)
       if (togl->PrivateCmapFlag) {
          /* need read/write colormap so user can store own color entries */
 #if defined(X11)
-         cmap = XCreateColormap(dpy, RootWindow(dpy, visinfo->screen),
+         cmap = XCreateColormap(dpy, XRootWindow(dpy, visinfo->screen),
                                 visinfo->visual, AllocAll);
 #elif defined(WIN32)
          cmap = Win32CreateCiColormap(togl);
+#elif defined(macintosh)
+         /* need to figure out how to do this correctly on Mac... */
+         cmap = DefaultColormap(dpy, scrnum);
 #endif /* X11 */
       }
       else {
          if (visinfo->visual==DefaultVisual(dpy, scrnum)) {
             /* share default/root colormap */
-            cmap = DefaultColormap(dpy,scrnum);
+            cmap = Tk_Colormap(togl->TkWin);
          }
          else {
             /* make a new read-only colormap */
-            cmap = XCreateColormap(dpy, RootWindow(dpy, visinfo->screen),
+            cmap = XCreateColormap(dpy, XRootWindow(dpy, visinfo->screen),
                                    visinfo->visual, AllocNone);
          }
       }
@@ -1662,109 +1962,133 @@ static int Togl_MakeWindowExist(struct Togl *togl)
    swa.colormap = cmap;
    swa.border_pixel = 0;
    swa.event_mask = ALL_EVENTS_MASK;
-   winPtr->window = XCreateWindow(dpy, parent,
+   window = XCreateWindow(dpy, parent,
                                   0, 0, togl->Width, togl->Height,
                                   0, visinfo->depth,
                                   InputOutput, visinfo->visual,
                                   CWBorderPixel | CWColormap | CWEventMask,
                                   &swa);
-
    /* Make sure window manager installs our colormap */
-   XSetWMColormapWindows( dpy, winPtr->window, &winPtr->window, 1 );
+   XSetWMColormapWindows( dpy,window, &window, 1 );
+
 #elif defined(WIN32)
-   winPtr->window = Tk_AttachHWND((Tk_Window)winPtr, hwnd);
+   window = Tk_AttachHWND((Tk_Window)winPtr, hwnd);
+
+#elif defined(macintosh)
+   window = TkpMakeWindow(winPtr, parent);
 #endif /* X11 */
 
-   hPtr = Tcl_CreateHashEntry(&winPtr->dispPtr->winTable,
-                              (char *) winPtr->window, &new_flag);
-   Tcl_SetHashValue(hPtr, winPtr);
-
-   winPtr->dirtyAtts = 0;
-   winPtr->dirtyChanges = 0;
-#ifdef TK_USE_INPUT_METHODS
-   winPtr->inputContext = NULL;
-#endif /* TK_USE_INPUT_METHODS */
-
-   if (!(winPtr->flags & TK_TOP_LEVEL)) {
-      /*
-       * If any siblings higher up in the stacking order have already
-       * been created then move this window to its rightful position
-       * in the stacking order.
-       *
-       * NOTE: this code ignores any changes anyone might have made
-       * to the sibling and stack_mode field of the window's attributes,
-       * so it really isn't safe for these to be manipulated except
-       * by calling Tk_RestackWindow.
-       */
-
-      for (winPtr2 = winPtr->nextPtr; winPtr2 != NULL;
-           winPtr2 = winPtr2->nextPtr) {
-         if ((winPtr2->window != None) && !(winPtr2->flags & TK_TOP_LEVEL)) {
-            XWindowChanges changes;
-            changes.sibling = winPtr2->window;
-            changes.stack_mode = Below;
-            XConfigureWindow(winPtr->display, winPtr->window,
-                             CWSibling|CWStackMode, &changes);
-            break;
-         }
-      }
-
-      /*
-       * If this window has a different colormap than its parent, add
-       * the window to the WM_COLORMAP_WINDOWS property for its top-level.
-       */
-
-      if ((winPtr->parentPtr != NULL) &&
-          (winPtr->atts.colormap != winPtr->parentPtr->atts.colormap)) {
-         TkWmAddToColormapWindows(winPtr);
-      }
-   }
-
+#ifdef USE_OVERLAY
    if (togl->OverlayFlag) {
       if (SetupOverlay( togl )==TCL_ERROR) {
          fprintf(stderr,"Warning: couldn't setup overlay.\n");
          togl->OverlayFlag = 0;
       }
    }
-
-   /*
-    * Issue a ConfigureNotify event if there were deferred configuration
-    * changes (but skip it if the window is being deleted;  the
-    * ConfigureNotify event could cause problems if we're being called
-    * from Tk_DestroyWindow under some conditions).
-    */
-   if ((winPtr->flags & TK_NEED_CONFIG_NOTIFY)
-       && !(winPtr->flags & TK_ALREADY_DEAD)){
-      XEvent event;
-
-      winPtr->flags &= ~TK_NEED_CONFIG_NOTIFY;
-
-      event.type = ConfigureNotify;
-      event.xconfigure.serial = LastKnownRequestProcessed(winPtr->display);
-      event.xconfigure.send_event = False;
-      event.xconfigure.display = winPtr->display;
-      event.xconfigure.event = winPtr->window;
-      event.xconfigure.window = winPtr->window;
-      event.xconfigure.x = winPtr->changes.x;
-      event.xconfigure.y = winPtr->changes.y;
-      event.xconfigure.width = winPtr->changes.width;
-      event.xconfigure.height = winPtr->changes.height;
-      event.xconfigure.border_width = winPtr->changes.border_width;
-      if (winPtr->changes.stack_mode == Above) {
-         event.xconfigure.above = winPtr->changes.sibling;
-      }
-      else {
-         event.xconfigure.above = None;
-      }
-      event.xconfigure.override_redirect = winPtr->atts.override_redirect;
-      Tk_HandleEvent(&event);
-   }
+#endif /* USE_OVERLAY */
 
    /* Request the X window to be displayed */
-   XMapWindow(dpy, Tk_WindowId(togl->TkWin));
+   XMapWindow(dpy, window);
 
-   /* Bind the context to the window and make it the current context. */
-   Togl_MakeCurrent(togl);
+#ifdef macintosh
+   if (togl->ShareContext && FindTogl(togl->ShareContext)) {
+      /* share OpenGL context with existing Togl widget */
+      struct Togl *shareWith = FindTogl(togl->ShareContext);
+      assert(shareWith);
+      assert(shareWith->aglCtx);
+      togl->aglCtx = shareWith->aglCtx;
+      togl->VisInfo = shareWith->VisInfo;
+      visinfo = togl->VisInfo;
+   
+   } else {
+       AGLContext shareCtx = NULL;
+
+       /* Need to do this after mapping window, so MacDrawable structure is more
+          completely filled in */
+       na = 0;
+       attribs[na++] = AGL_MINIMUM_POLICY;
+       attribs[na++] = AGL_ROBUST;
+       if (togl->RgbaFlag) {
+          /* RGB[A] mode */
+          attribs[na++] = AGL_RGBA;
+          attribs[na++] = AGL_RED_SIZE;
+          attribs[na++] = togl->RgbaRed;
+          attribs[na++] = AGL_GREEN_SIZE;
+          attribs[na++] = togl->RgbaGreen;
+          attribs[na++] = AGL_BLUE_SIZE;
+          attribs[na++] = togl->RgbaBlue;
+          if (togl->AlphaFlag) {
+             attribs[na++] = AGL_ALPHA_SIZE;
+             attribs[na++] = togl->AlphaSize;
+          }
+       } else {
+          /* Color index mode */
+          attribs[na++] = AGL_BUFFER_SIZE;
+          attribs[na++] = 8;
+       }
+       if (togl->DepthFlag) {
+          attribs[na++] = AGL_DEPTH_SIZE;
+          attribs[na++] = togl->DepthSize;
+       }
+       if (togl->DoubleFlag) {
+          attribs[na++] = AGL_DOUBLEBUFFER;
+       }
+       if (togl->StencilFlag) {
+          attribs[na++] = AGL_STENCIL_SIZE;
+          attribs[na++] = togl->StencilSize;
+       }
+       if (togl->AccumFlag) {
+          attribs[na++] = AGL_ACCUM_RED_SIZE;
+          attribs[na++] = togl->AccumRed;
+          attribs[na++] = AGL_ACCUM_GREEN_SIZE;
+          attribs[na++] = togl->AccumGreen;
+          attribs[na++] = AGL_ACCUM_BLUE_SIZE;
+          attribs[na++] = togl->AccumBlue;
+          if (togl->AlphaFlag) {
+             attribs[na++] = AGL_ACCUM_ALPHA_SIZE;
+             attribs[na++] = togl->AccumAlpha;
+          }
+       }
+       if (togl->AuxNumber != 0) {
+          attribs[na++] = AGL_AUX_BUFFERS;
+          attribs[na++] = togl->AuxNumber;
+       }
+       attribs[na++] = AGL_NONE;
+
+       if ((fmt = aglChoosePixelFormat(NULL, 0, attribs)) == NULL) {
+	 Tcl_SetResult(togl->Interp, "Togl: couldn't choose pixel format",TCL_STATIC);
+	 return DUMMY_WINDOW;
+       }
+
+       /*
+        * Check whether to share lists.
+        */
+       if (togl->ShareList) {
+          /* share display lists with existing togl widget */
+          struct Togl *shareWith = FindTogl(togl->ShareList);
+          if (shareWith)
+             shareCtx = shareWith->aglCtx;
+       }
+       if ((togl->aglCtx = aglCreateContext(fmt, shareCtx)) == NULL) {
+          aglDestroyPixelFormat(fmt);
+          Tcl_SetResult(togl->Interp, "Togl: couldn't create context",TCL_STATIC);
+	  return DUMMY_WINDOW;
+       }
+       
+       aglDestroyPixelFormat(fmt);
+       if (!aglSetDrawable(togl->aglCtx,
+                           ((MacDrawable *) (window))->toplevel->portPtr)) {
+          aglDestroyContext(togl->aglCtx);
+          Tcl_SetResult(togl->Interp, "Togl: couldn't set drawable",TCL_STATIC);
+	  return DUMMY_WINDOW;
+       }
+
+       /* Just for portability, define the simplest visinfo */
+       visinfo = &VisInf;
+       visinfo->visual = DefaultVisual(dpy, DefaultScreen(dpy));
+       visinfo->depth = visinfo->visual->bits_per_rgb;
+   }
+#endif                          /* macintosh */
 
 #if defined(X11)
    /* Check for a single/double buffering snafu */
@@ -1783,9 +2107,9 @@ static int Togl_MakeWindowExist(struct Togl *togl)
 
    /* for EPS Output */
    if ( !togl->RgbaFlag) {
-      GLint index_bits;
       int index_size;
-#if defined(X11)
+#if defined(X11) || defined(macintosh)
+      GLint index_bits;
       glGetIntegerv( GL_INDEX_BITS, &index_bits );
       index_size = 1 << index_bits;
 #elif defined(WIN32)
@@ -1802,7 +2126,7 @@ static int Togl_MakeWindowExist(struct Togl *togl)
       }
    }
 
-   return TCL_OK;
+   return window;
 }
 
 /*
@@ -1819,7 +2143,7 @@ static int Togl_MakeWindowExist(struct Togl *togl)
  *      The widget is destroyed.
  *
  *----------------------------------------------------------------------
- */ 
+ */
 static void ToglCmdDeletedProc( ClientData clientData )
 {
    struct Togl *togl = (struct Togl *)clientData;
@@ -1847,6 +2171,7 @@ static void ToglCmdDeletedProc( ClientData clientData )
       glXDestroyContext( togl->display, togl->GlCtx );
       togl->GlCtx = NULL;
    }
+#ifdef USE_OVERLAY
    if (togl->OverlayCtx) {
       Tcl_HashEntry *entryPtr;
       TkWindow *winPtr = (TkWindow *) togl->TkWin;
@@ -1858,6 +2183,7 @@ static void ToglCmdDeletedProc( ClientData clientData )
       glXDestroyContext( togl->display, togl->OverlayCtx );
       togl->OverlayCtx = NULL;
    }
+#endif /* USE_OVERLAY */
 #endif
 
    if (tkwin != NULL) {
@@ -1894,7 +2220,11 @@ static void Togl_Destroy( ClientData clientData )
    /* remove from linked list */
    RemoveFromList(togl);
 
+#if defined(X11)
    free(togl);
+#elif defined(macintosh)
+   free ((char *) togl);
+#endif
 }
 
 
@@ -1971,7 +2301,7 @@ static void Togl_EventProc(ClientData clientData, XEvent *eventPtr)
 #else
 	    Tk_DeleteTimerHandler(togl->timerHandler);
 #endif
-	    
+
 	 }
 	 if (togl->UpdatePending) {
 #if (TCL_MAJOR_VERSION * 100 + TCL_MINOR_VERSION) >= 705
@@ -1999,8 +2329,8 @@ static void Togl_EventProc(ClientData clientData, XEvent *eventPtr)
 void Togl_PostRedisplay( struct Togl *togl )
 {
    if (!togl->UpdatePending) {
-      Tk_DoWhenIdle( Togl_Render, (ClientData) togl );
       togl->UpdatePending = GL_TRUE;
+      Tk_DoWhenIdle( Togl_Render, (ClientData) togl );
    }
 }
 
@@ -2014,6 +2344,8 @@ void Togl_SwapBuffers( const struct Togl *togl )
       assert(res == TRUE);
 #elif defined(X11)
       glXSwapBuffers( Tk_Display(togl->TkWin), Tk_WindowId(togl->TkWin) );
+#elif defined(macintosh)
+      aglSwapBuffers(togl->aglCtx);
 #endif /* WIN32 */
    }
    else {
@@ -2141,9 +2473,9 @@ static UINT Win32AllocColor( const struct Togl *togl,
     int new, refCount;
     Tcl_HashEntry *entryPtr;
 
-    entry.peRed =  red*255 + .5;
-    entry.peGreen = green*255 + .5;
-    entry.peBlue = blue*255 + .5;
+    entry.peRed   = (unsigned char)(red*255 + .5);
+    entry.peGreen = (unsigned char)(green*255 + .5);
+    entry.peBlue  = (unsigned char)(blue*255 + .5);
     entry.peFlags = 0;
 
 	/*
@@ -2160,7 +2492,7 @@ static UINT Win32AllocColor( const struct Togl *togl,
 	 */
 
 	if (newColor != closeColor) {
-        if (cmap->size == togl->CiColormapSize) {
+        if (cmap->size == (unsigned int)togl->CiColormapSize) {
             entry = closeEntry;
         }
         else {
@@ -2182,9 +2514,9 @@ static UINT Win32AllocColor( const struct Togl *togl,
 	Tcl_SetHashValue(entryPtr, (ClientData)refCount);
 
    /* for EPS output */
-    togl->EpsRedMap[index] = entry.peRed / 255.0;
-    togl->EpsGreenMap[index] = entry.peGreen / 255.0;
-    togl->EpsBlueMap[index] = entry.peBlue / 255.0;
+    togl->EpsRedMap[index]   = (GLfloat)(entry.peRed / 255.0);
+    togl->EpsGreenMap[index] = (GLfloat)(entry.peGreen / 255.0);
+    togl->EpsBlueMap[index]  = (GLfloat)(entry.peBlue / 255.0);
     return index;
 }
 
@@ -2227,18 +2559,18 @@ static void Win32SetColor( const struct Togl *togl,
     TkWinColormap *cmap = (TkWinColormap *) Tk_Colormap(togl->TkWin);
     PALETTEENTRY entry;
 
-    entry.peRed =  red*255 + .5;
-    entry.peGreen = green*255 + .5;
-    entry.peBlue = blue*255 + .5;
+    entry.peRed =   (unsigned char)(red*255 + .5);
+    entry.peGreen = (unsigned char)(green*255 + .5);
+    entry.peBlue =  (unsigned char)(blue*255 + .5);
     entry.peFlags = 0;
     SetPaletteEntries(cmap->palette, index, 1, &entry);
 	SelectPalette(togl->tglGLHdc, cmap->palette, TRUE);
 	RealizePalette(togl->tglGLHdc);
 
 	/* for EPS output */
-    togl->EpsRedMap[index] = entry.peRed / 255.0;
-    togl->EpsGreenMap[index] = entry.peGreen / 255.0;
-    togl->EpsBlueMap[index] = entry.peBlue / 255.0;
+    togl->EpsRedMap[index]   = (GLfloat)(entry.peRed / 255.0);
+    togl->EpsGreenMap[index] = (GLfloat)(entry.peGreen / 255.0);
+    togl->EpsBlueMap[index]  = (GLfloat)(entry.peBlue / 255.0);
 }
 #endif /* X11 */
 
@@ -2247,9 +2579,6 @@ static void Win32SetColor( const struct Togl *togl,
 unsigned long Togl_AllocColor( const struct Togl *togl,
                                float red, float green, float blue )
 {
-   XColor xcol;
-   int exact;
-
    if (togl->RgbaFlag) {
       fprintf(stderr,"Error: Togl_AllocColor illegal in RGBA mode.\n");
       return 0;
@@ -2261,22 +2590,31 @@ unsigned long Togl_AllocColor( const struct Togl *togl,
    }
 
 #if defined(X11)
-   xcol.red   = (short) (red   * 65535.0);
-   xcol.green = (short) (green * 65535.0);
-   xcol.blue  = (short) (blue  * 65535.0);
+   {
+     XColor xcol;
+     int exact;
 
-   noFaultXAllocColor( Tk_Display(togl->TkWin), Tk_Colormap(togl->TkWin),
-                       Tk_Visual(togl->TkWin)->map_entries, &xcol, &exact );
+     xcol.red   = (short) (red   * 65535.0);
+     xcol.green = (short) (green * 65535.0);
+     xcol.blue  = (short) (blue  * 65535.0);
+     
+     noFaultXAllocColor( Tk_Display(togl->TkWin), Tk_Colormap(togl->TkWin),
+			 Tk_Visual(togl->TkWin)->map_entries, &xcol, &exact );
+     /* for EPS output */
+     togl->EpsRedMap[ xcol.pixel] = (float) xcol.red / 65535.0;
+     togl->EpsGreenMap[ xcol.pixel] = (float) xcol.green / 65535.0;
+     togl->EpsBlueMap[ xcol.pixel] = (float) xcol.blue / 65535.0;
+     
+     return xcol.pixel;
+   }
 
-
-   /* for EPS output */
-   togl->EpsRedMap[ xcol.pixel] = xcol.red / 65535.0;
-   togl->EpsGreenMap[ xcol.pixel] = xcol.green / 65535.0;
-   togl->EpsBlueMap[ xcol.pixel] = xcol.blue / 65535.0;
-
-   return xcol.pixel;
 #elif defined(WIN32)
    return Win32AllocColor( togl, red, green, blue );
+
+#elif defined(macintosh)
+   /* still need to implement this on Mac... */
+   return 0;
+
 #endif /* X11 */
 }
 
@@ -2307,7 +2645,6 @@ void Togl_FreeColor( const struct Togl *togl, unsigned long pixel )
 void Togl_SetColor( const struct Togl *togl,
                     unsigned long index, float red, float green, float blue )
 {
-   XColor xcol;
 
    if (togl->RgbaFlag) {
       fprintf(stderr,"Error: Togl_AllocColor illegal in RGBA mode.\n");
@@ -2319,35 +2656,35 @@ void Togl_SetColor( const struct Togl *togl,
    }
 
 #if defined(X11)
-   xcol.pixel = index;
-   xcol.red   = (short) (red   * 65535.0);
-   xcol.green = (short) (green * 65535.0);
-   xcol.blue  = (short) (blue  * 65535.0);
-   xcol.flags = DoRed | DoGreen | DoBlue;
-
-   XStoreColor( Tk_Display(togl->TkWin), Tk_Colormap(togl->TkWin), &xcol );
-
-   /* for EPS output */
-   togl->EpsRedMap[ xcol.pixel] = xcol.red / 65535.0;
-   togl->EpsGreenMap[ xcol.pixel] = xcol.green / 65535.0;
-   togl->EpsBlueMap[ xcol.pixel] = xcol.blue / 65535.0;
-
+   {
+     XColor xcol;
+     xcol.pixel = index;
+     xcol.red   = (short) (red   * 65535.0);
+     xcol.green = (short) (green * 65535.0);
+     xcol.blue  = (short) (blue  * 65535.0);
+     xcol.flags = DoRed | DoGreen | DoBlue;
+     
+     XStoreColor( Tk_Display(togl->TkWin), Tk_Colormap(togl->TkWin), &xcol );
+     
+     /* for EPS output */
+     togl->EpsRedMap[ xcol.pixel] = (float) xcol.red / 65535.0;
+     togl->EpsGreenMap[ xcol.pixel] = (float) xcol.green / 65535.0;
+     togl->EpsBlueMap[ xcol.pixel] = (float) xcol.blue / 65535.0;
+   }
 #elif defined(WIN32)
    Win32SetColor( togl, index, red, green, blue );
 #endif /* X11 */
 }
 
 
-
 #if defined(WIN32)
-#include "tkFont.h"
 
 /*
  * The following structure represents Windows' implementation of a font.
  */
 
 typedef struct WinFont {
-    TkFont font;		/* Stuff used by generic font package.  Must
+    Tk_Font font;		/* Stuff used by generic font package.  Must
 				 * be first in structure. */
     HFONT hFont;		/* Windows information about font. */
     HWND hwnd;			/* Toplevel window of application that owns
@@ -2426,11 +2763,10 @@ GLuint Togl_LoadBitmapFont( const struct Togl *togl, const char *fontname )
    assert( name );
 
 #if defined(X11)
-   fontinfo = XLoadQueryFont( Tk_Display(togl->TkWin), name );
+   fontinfo = (XFontStruct *) XLoadQueryFont( Tk_Display(togl->TkWin), name );
    if (!fontinfo) {
       return 0;
    }
-
    first = fontinfo->min_char_or_byte2;
    last = fontinfo->max_char_or_byte2;
 #elif defined(WIN32)
@@ -2442,9 +2778,12 @@ GLuint Togl_LoadBitmapFont( const struct Togl *togl, const char *fontname )
    GetTextMetrics(togl->tglGLHdc, &tm);
    first = tm.tmFirstChar;
    last = tm.tmLastChar;
+#elif defined(macintosh)
+   first = 10; /* don't know how to determine font range on Mac... */
+   last = 127;
 #endif /* X11 */
-   count = last-first+1;
 
+   count = last-first+1;
    fontbase = glGenLists( (GLuint) (last+1) );
    if (fontbase==0) {
 #ifdef WIN32
@@ -2453,12 +2792,16 @@ GLuint Togl_LoadBitmapFont( const struct Togl *togl, const char *fontname )
 #endif /* WIN32 */
       return 0;
    }
+
 #if defined(WIN32)
    wglUseFontBitmaps(togl->tglGLHdc, first, count, (int) fontbase+first );
    SelectObject(togl->tglGLHdc, oldFont);
    Tk_FreeFont((Tk_Font) winfont);
 #elif defined(X11)
    glXUseXFont( fontinfo->fid, first, count, (int) fontbase+first );
+#elif defined(macintosh)
+   aglUseFont(togl->aglCtx, 1, 0, 14, /* for now, only app font, regular 14-point */
+              10, 118, fontbase+first);
 #endif
 
    /* Record the list base and number of display lists
@@ -2578,7 +2921,7 @@ void Togl_PostOverlayRedisplay( struct Togl *togl )
 
 void Togl_OverlayDisplayFunc( Togl_Callback *proc )
 {
-   OverlayDisplayProc = proc;
+   DefaultOverlayDisplayProc = proc;
 }
 
 
@@ -2859,21 +3202,29 @@ static int generateEPS(const char *filename, int inColor,
       bitpixel = 0;
       if ( inColor) {
          double pix = 0.0;
-         pix = 0.30 * ( double)curpix[ i++] + 0.59 * ( double)curpix[ i++] + 0.11 * ( double)curpix[ i++];
+         pix = 0.30 * ( double)curpix[i] + 0.59 * ( double)curpix[i+1] + 0.11 * ( double)curpix[i+2];
+         i += 3;
          if ( pix > 127.0) bitpixel |= 0x80;
-         pix = 0.30 * ( double)curpix[ i++] + 0.59 * ( double)curpix[ i++] + 0.11 * ( double)curpix[ i++];
+         pix = 0.30 * ( double)curpix[i] + 0.59 * ( double)curpix[i+1] + 0.11 * ( double)curpix[i+2];
+         i += 3;
          if ( pix > 127.0) bitpixel |= 0x40;
-         pix = 0.30 * ( double)curpix[ i++] + 0.59 * ( double)curpix[ i++] + 0.11 * ( double)curpix[ i++];
+         pix = 0.30 * ( double)curpix[i] + 0.59 * ( double)curpix[i+1] + 0.11 * ( double)curpix[i+2];
+         i += 3;
          if ( pix > 127.0) bitpixel |= 0x20;
-         pix = 0.30 * ( double)curpix[ i++] + 0.59 * ( double)curpix[ i++] + 0.11 * ( double)curpix[ i++];
+         pix = 0.30 * ( double)curpix[i] + 0.59 * ( double)curpix[i+1] + 0.11 * ( double)curpix[i+2];
+         i += 3;
          if ( pix > 127.0) bitpixel |= 0x10;
-         pix = 0.30 * ( double)curpix[ i++] + 0.59 * ( double)curpix[ i++] + 0.11 * ( double)curpix[ i++];
+         pix = 0.30 * ( double)curpix[i] + 0.59 * ( double)curpix[i+1] + 0.11 * ( double)curpix[i+2];
+         i += 3;
          if ( pix > 127.0) bitpixel |= 0x08;
-         pix = 0.30 * ( double)curpix[ i++] + 0.59 * ( double)curpix[ i++] + 0.11 * ( double)curpix[ i++];
+         pix = 0.30 * ( double)curpix[i] + 0.59 * ( double)curpix[i+1] + 0.11 * ( double)curpix[i+2];
+         i += 3;
          if ( pix > 127.0) bitpixel |= 0x04;
-         pix = 0.30 * ( double)curpix[ i++] + 0.59 * ( double)curpix[ i++] + 0.11 * ( double)curpix[ i++];
+         pix = 0.30 * ( double)curpix[i] + 0.59 * ( double)curpix[i+1] + 0.11 * ( double)curpix[i+2];
+         i += 3;
          if ( pix > 127.0) bitpixel |= 0x02;
-         pix = 0.30 * ( double)curpix[ i++] + 0.59 * ( double)curpix[ i++] + 0.11 * ( double)curpix[ i++];
+         pix = 0.30 * ( double)curpix[i] + 0.59 * ( double)curpix[i+1] + 0.11 * ( double)curpix[i+2];
+         i += 3;
          if ( pix > 127.0) bitpixel |= 0x01;
       }
       else {
@@ -2999,9 +3350,9 @@ int Togl_DumpToEpsFile( const struct Togl *togl, const char *filename,
            LPPALETTEENTRY entry = malloc(togl->EpsMapSize * sizeof(PALETTEENTRY));
            n = GetPaletteEntries(cmap->palette, 0, togl->EpsMapSize, entry);
            for (i=0; i<n; i++) {
-               togl->EpsRedMap[i] = entry[i].peRed / 255.0;
-               togl->EpsGreenMap[i] = entry[i].peGreen / 255.0;
-               togl->EpsBlueMap[i] = entry[i].peBlue / 255.0;
+               togl->EpsRedMap[i]   = (GLfloat)(entry[i].peRed / 255.0);
+               togl->EpsGreenMap[i] = (GLfloat)(entry[i].peGreen / 255.0);
+               togl->EpsBlueMap[i]  = (GLfloat)(entry[i].peBlue / 255.0);
            }
            free(entry);
        }
@@ -3066,7 +3417,7 @@ Togl_StereoDrawBuffer(GLenum mode)
       stereo.currentStereoBuffer = STEREO_BUFFER_LEFT;
       break;
     case GL_RIGHT:
-    case GL_FRONT_RIGHT: 
+    case GL_FRONT_RIGHT:
       stereo.currentStereoBuffer = STEREO_BUFFER_RIGHT;
       mode = GL_FRONT;
       break;
@@ -3127,7 +3478,7 @@ Togl_StereoClear(GLbitfield mask)
 static void
 stereoMakeCurrent(Display *dpy, Window win, GLXContext ctx)
 {
-  
+
   if (stereo.useSGIStereo) {
     if (dpy && (dpy != stereo.currentDisplay)) {
       int event, error;
@@ -3173,9 +3524,112 @@ Togl_StereoFrustum(GLfloat left, GLfloat right, GLfloat bottom, GLfloat top,
                GLfloat near, GLfloat far, GLfloat eyeDist, GLfloat eyeOffset)
 {
   GLfloat eyeShift = (eyeDist - near) * (eyeOffset / eyeDist);
-  
+
   glFrustum(left+eyeShift, right+eyeShift, bottom, top, near, far);
   glTranslatef(-eyeShift, 0.0, 0.0);
 }
 
 #endif /* __sgi STEREO */
+
+
+#ifdef macintosh
+/* needed to make shared library on Mac with CodeWarrior; should be overridden by user app */
+/*
+int main(int argc, char *argv[])
+{
+  return -1;
+}
+*/
+
+/* the following code is borrowed from tkMacAppInit.c */
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * MacintoshInit --
+ *
+ *	This procedure calls Mac specific initilization calls.  Most of
+ *	these calls must be made as soon as possible in the startup
+ *	process.
+ *
+ * Results:
+ *	Returns TCL_OK if everything went fine.  If it didn't the
+ *	application should probably fail.
+ *
+ * Side effects:
+ *	Inits the application.
+ *
+ *----------------------------------------------------------------------
+ */
+
+int Togl_MacInit(void)
+{
+   int i;
+   long result, mask = 0x0700;  /* mask = system 7.x */
+
+#if GENERATING68K && !GENERATINGCFM
+   SetApplLimit(GetApplLimit() - (TK_MAC_68K_STACK_GROWTH));
+#endif
+   MaxApplZone();
+   for (i = 0; i < 4; i++) {
+      (void) MoreMasters();
+   }
+
+   /*
+    * Tk needs us to set the qd pointer it uses.  This is needed
+    * so Tk doesn't have to assume the availablity of the qd global
+    * variable.  Which in turn allows Tk to be used in code resources.
+    */
+   tcl_macQdPtr = &qd;
+
+   /*
+    * If appearance is present, then register Tk as an Appearance client
+    * This means that the mapping from non-Appearance to Appearance cdefs
+    * will be done for Tk regardless of the setting in the Appearance
+    * control panel.
+    */
+   if (TkMacHaveAppearance()) {
+      RegisterAppearanceClient();
+   }
+
+   InitGraf(&tcl_macQdPtr->thePort);
+   InitFonts();
+   InitWindows();
+   InitMenus();
+   InitDialogs((long) NULL);
+   InitCursor();
+
+   /*
+    * Make sure we are running on system 7 or higher
+    */
+   if ((NGetTrapAddress(_Gestalt, ToolTrap) ==
+        NGetTrapAddress(_Unimplemented, ToolTrap))
+       || (((Gestalt(gestaltSystemVersion, &result) != noErr)
+            || (result < mask)))) {
+      panic("Tcl/Tk requires System 7 or higher.");
+   }
+
+   /*
+    * Make sure we have color quick draw
+    * (this means we can't run on 68000 macs)
+    */
+   if (((Gestalt(gestaltQuickdrawVersion, &result) != noErr)
+        || (result < gestalt32BitQD13))) {
+      panic("Tk requires Color QuickDraw.");
+   }
+
+   FlushEvents(everyEvent, 0);
+   SetEventMask(everyEvent);
+
+   Tcl_MacSetEventProc(TkMacConvertEvent);
+   return TCL_OK;
+}
+
+int Togl_MacSetupMainInterp(Tcl_Interp * interp)
+{
+   TkMacInitAppleEvents(interp);
+   TkMacInitMenus(interp);
+   return TCL_OK;
+}
+
+#endif                          /* macintosh */

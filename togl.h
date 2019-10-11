@@ -1,15 +1,24 @@
-/* $Id: togl.h,v 1.17 1997/11/15 04:14:37 brianp Exp $ */
+/* $Id: togl.h,v 1.20 2001/01/29 18:11:53 brianp Exp $ */
 
 /*
  * Togl - a Tk OpenGL widget
- * Version 1.5
- * Copyright (C) 1996-1997  Brian Paul and Ben Bederson
+ * Version 1.6
+ * Copyright (C) 1996-1998  Brian Paul and Ben Bederson
  * See the LICENSE file for copyright details.
  */
 
 
 /*
  * $Log: togl.h,v $
+ * Revision 1.20  2001/01/29 18:11:53  brianp
+ * Jonas Beskow's changes to use Tcl/Tk stub interface
+ *
+ * Revision 1.19  2000/05/12 00:28:12  thiessen
+ * first Macintosh port
+ *
+ * Revision 1.18  1998/10/14 01:26:51  brianp
+ * added Togl_SetTimerFunc(), bumped version to 1.6
+ *
  * Revision 1.17  1997/11/15 04:14:37  brianp
  * changed version to 1.5
  *
@@ -69,15 +78,29 @@
 #ifndef TOGL_H
 #define TOGL_H
 
+#if defined(WIN32)
+#   define WIN32_LEAN_AND_MEAN
+#   include <windows.h>
+#   undef WIN32_LEAN_AND_MEAN
+#   if defined(_MSC_VER)
+#	define EXPORT(a,b) __declspec(dllexport) a b
+#	define DllEntryPoint DllMain
+#   else
+#	if defined(__BORLANDC__)
+#	    define EXPORT(a,b) a _export b
+#	else
+#	    define EXPORT(a,b) a b
+#	endif
+#   endif
+#else
+#   define EXPORT(a,b) a b
+#endif /* WIN32 */
 
-/*** Windows headers ***/
-#ifdef WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#undef WIN32_LEAN_AND_MEAN
-#include <winnt.h>
-#endif /*WIN32*/
-
+#ifdef macintosh
+# ifndef MAC_TCL
+#   define MAC_TCL
+# endif
+#endif
 
 #include <tcl.h>
 #include <tk.h>
@@ -103,9 +126,9 @@ extern "C" {
 
 
 
-#define TOGL_VERSION "1.5"
+#define TOGL_VERSION "1.6"
 #define TOGL_MAJOR_VERSION 1
-#define TOGL_MINOR_VERSION 5
+#define TOGL_MINOR_VERSION 6
 
 
 
@@ -134,15 +157,11 @@ struct Togl;
 
 typedef void (Togl_Callback) (struct Togl *togl);
 typedef int  (Togl_CmdProc) (struct Togl *togl, int argc, char *argv[]);
-
-
-
-extern int Togl_Init( Tcl_Interp *interp );
-
-
+  
+  EXPORT(int,Togl_Init)(Tcl_Interp *interp);
 
 /*
- * Callback setup functions
+ * Default/initial callback setup functions
  */
 
 extern void Togl_CreateFunc( Togl_Callback *proc );
@@ -169,6 +188,8 @@ extern void Togl_SetDisplayFunc( struct Togl *togl, Togl_Callback *proc );
 extern void Togl_SetReshapeFunc( struct Togl *togl, Togl_Callback *proc );
 
 extern void Togl_SetDestroyFunc( struct Togl *togl, Togl_Callback *proc );
+
+extern void Togl_SetTimerFunc( struct Togl *togl, Togl_Callback *proc );
 
 
 /*
@@ -303,6 +324,12 @@ extern int Togl_DumpToEpsFile( const struct Togl *togl,
                                void (*user_redraw)(const struct Togl *) );
 
 
+
+/* Mac-specific setup functions */
+#ifdef macintosh
+int Togl_MacInit(void);
+int Togl_MacSetupMainInterp(Tcl_Interp *interp);
+#endif
 
 #ifdef __cplusplus
 }

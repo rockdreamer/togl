@@ -374,18 +374,19 @@ int rotate( struct Togl *togl, int argc, char *argv[] )
    strcpy( interp->result, argv[2] );
    return TCL_OK;
 }
-int my_init(Tcl_Interp *interp) 
-{
-   /*
-    * Initialize Tcl, Tk, and the Togl widget module.
-    */
 
-   if (Tcl_Init(interp) == TCL_ERROR) {
-      return TCL_ERROR;
-   }
-   if (Tk_Init(interp) == TCL_ERROR) {
-      return TCL_ERROR;
-   }
+EXPORT(int,Gears_Init)(Tcl_Interp *interp) 
+{
+  /*
+   * Initialize Tcl, Tk, and the Togl widget module.
+   */
+#ifdef USE_TCL_STUBS
+  if (Tcl_InitStubs(interp, "8.1", 0) == NULL) {return TCL_ERROR;}
+#endif
+#ifdef USE_TK_STUBS
+  if (Tk_InitStubs(interp, "8.1", 0) == NULL) {return TCL_ERROR;}
+#endif
+
    if (Togl_Init(interp) == TCL_ERROR) {
       return TCL_ERROR;
    }
@@ -401,12 +402,5 @@ int my_init(Tcl_Interp *interp)
    Togl_TimerFunc(  idle );
    Togl_CreateCommand("rotate",rotate);
    Togl_CreateCommand("position",position);
-   Tcl_SetVar( interp, "tcl_rcFileName", "./gears.tcl", TCL_GLOBAL_ONLY );
    return TCL_OK;
-}
-
-int main( int argc, char *argv[] )
-{
-  Tk_Main(argc,argv,my_init );
-  return 0;
 }
