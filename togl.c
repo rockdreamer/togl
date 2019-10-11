@@ -495,9 +495,9 @@ struct Togl
 
 int Togl_CallCallback(Togl *togl, Tcl_Obj *cmd);
 static int Togl_CallCallback_P(Togl *togl, Tcl_Obj *cmd, double *params, int nparams);
-static int viewPixelScale(NSView *nsview);
 
 #if defined(TOGL_NSOPENGL)
+static int viewPixelScale(NSView *nsview);
 
 @implementation ToglNSView
 
@@ -2524,6 +2524,7 @@ Togl_ObjWidget(ClientData clientData, Tcl_Interp *interp, int objc,
           }
     case TOGL_MAKETOPFORTRACKPADEVENTS:
           if (objc == 2) {
+#if defined(TOGL_NSOPENGL)
 	    // This hack places the Togl NSView at the top of sibling views so that it receives
 	    // trackpad events.  The hierarchy is not used for drawing, nor for mouse event dispatching.
 	    [togl->nsview retain];
@@ -2532,6 +2533,7 @@ Togl_ObjWidget(ClientData clientData, Tcl_Interp *interp, int objc,
 	    NSView *topview = d->toplevel->view;
 	    [topview addSubview:togl->nsview];
 	    [togl->nsview release];
+#endif
           } else {
               Tcl_WrongNumArgs(interp, 2, objv, NULL);
               result = TCL_ERROR;
@@ -3865,11 +3867,11 @@ Togl_RedisplayProc(ClientData clientData, XEvent *eventPtr)
     }
 }
 
+#if defined(TOGL_AGL) || defined(TOGL_NSOPENGL)
 static int
 viewPixelScale(NSView *nsview)
 {
   int pixelScale = 1;
-#if defined(TOGL_AGL) || defined(TOGL_NSOPENGL)
   if ([nsview respondsToSelector:@selector(convertRectToBacking:)])
     {
       NSRect wbounds = [nsview bounds];
@@ -3877,9 +3879,9 @@ viewPixelScale(NSView *nsview)
       pixelScale = (wbounds.size.width > 0 ?
 		    gbounds.size.width / wbounds.size.width : 1);
     }
-#endif
   return pixelScale;
 }
+#endif
 
 /* 
  * This gets called to handle Togl window configuration events
@@ -3917,22 +3919,24 @@ Togl_EventProc(ClientData clientData, XEvent *eventPtr)
       case ConfigureNotify:
           if (togl->PbufferFlag)
               break;
+
+#if defined(TOGL_AGL) || defined(TOGL_NSOPENGL)
 	  int pixelScale = viewPixelScale(togl->nsview);
           if (togl->Width == Tk_Width(togl->TkWin)
 	      && togl->Height == Tk_Height(togl->TkWin)
 	      && togl->PixelScale == pixelScale) {
-
-#if defined(TOGL_AGL) || defined(TOGL_NSOPENGL)
               // Even though the size hasn't changed,
               // it's position on the screen may have.
               if (Tk_IsMapped(togl->TkWin))
                   SetMacBufRect(togl);
-#endif
               break;
           }
+#endif
           togl->Width = Tk_Width(togl->TkWin);
           togl->Height = Tk_Height(togl->TkWin);
+#if defined(TOGL_AGL) || defined(TOGL_NSOPENGL)
 	  togl->PixelScale = pixelScale;
+#endif
           (void) XResizeWindow(Tk_Display(togl->TkWin),
                   Tk_WindowId(togl->TkWin), togl->Width, togl->Height);
 #if defined(TOGL_X11)
