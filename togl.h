@@ -1,4 +1,4 @@
-/* $Id: togl.h,v 1.37 2008/04/17 00:13:42 gregcouch Exp $ */
+/* $Id: togl.h,v 1.39 2009/03/31 23:21:13 gregcouch Exp $ */
 
 /* vi:set sw=4: */
 
@@ -6,7 +6,7 @@
  * Togl - a Tk OpenGL widget
  *
  * Copyright (C) 1996-2002  Brian Paul and Ben Bederson
- * Copyright (C) 2005-2008  Greg Couch
+ * Copyright (C) 2005-2009  Greg Couch
  * See the LICENSE file for copyright details.
  */
 
@@ -74,9 +74,9 @@ extern "C" {
 /* *INDENT-ON* */
 #  endif
 
-#  define TOGL_VERSION "2.0"
+#  define TOGL_VERSION "2.1"
 #  define TOGL_MAJOR_VERSION 2
-#  define TOGL_MINOR_VERSION 0
+#  define TOGL_MINOR_VERSION 1
 
 /* 
  * "Standard" fonts which can be specified to Togl_LoadBitmapFont()
@@ -105,7 +105,6 @@ extern "C" {
 #  define TOGL_STEREO_NONE		0
 #  define TOGL_STEREO_LEFT_EYE		1       /* just the left eye */
 #  define TOGL_STEREO_RIGHT_EYE		2       /* just the right eye */
-#  define TOGL_STEREO_NVIDIA_CON	3       /* GeForce Consumer 3D stereo */
 #  define TOGL_STEREO_ONE_EYE_MAX	127
 /* These versions need both eyes drawn */
 #  define TOGL_STEREO_NATIVE		128
@@ -114,6 +113,7 @@ extern "C" {
 #  define TOGL_STEREO_CROSS_EYE		131
 #  define TOGL_STEREO_WALL_EYE		132
 #  define TOGL_STEREO_DTI		133     /* dti3d.com */
+#  define TOGL_STEREO_ROW_INTERLEAVED	134     /* www.vrex.com/developer/interleave.htm */
 
 struct Togl;
 typedef struct Togl Togl;
@@ -127,16 +127,16 @@ const char *Togl_InitStubs _ANSI_ARGS_((Tcl_Interp *interp, const char *version,
 	Tcl_PkgRequire(interp, "Togl", version, exact)
 #  endif
 
-#  ifdef __cplusplus
-/* *INDENT-OFF* */
-}
-/* *INDENT-ON* */
-#  endif
-
 /* 
  * Platform independent exported functions
  */
 
 #  include "toglDecls.h"
+
+#  ifdef __cplusplus
+/* *INDENT-OFF* */
+}
+/* *INDENT-ON* */
+#  endif
 
 #endif

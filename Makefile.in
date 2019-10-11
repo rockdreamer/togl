@@ -12,7 +12,7 @@
 # See the file "license.terms" for information on usage and redistribution
 # of this file, and for a DISCLAIMER OF ALL WARRANTIES.
 #
-# RCS: @(#) $Id: Makefile.in,v 1.21 2008/04/21 23:42:53 gregcouch Exp $
+# RCS: @(#) $Id: Makefile.in,v 1.26 2009/12/23 21:46:16 gregcouch Exp $
 
 #========================================================================
 # Add additional lines to handle any additional AC_SUBST cases that
@@ -24,7 +24,7 @@ SHLIB_SUFFIX	= @SHLIB_SUFFIX@
 MATH_LIBS	= @MATH_LIBS@
 LIBGLU		= @LIBGLU@
 
-EXAMPLE_SRCS	= double.c gears.c index.c overlay.c stereo.c texture.c
+EXAMPLE_SRCS	= double.c gears.c index.c overlay.c stereo.c texture.c pbuffer.c
 EXAMPLE_OBJS	= $(EXAMPLE_SRCS:.c=.$(OBJEXT))
 EXAMPLE_SHLIBS	= $(EXAMPLE_SRCS:.c=$(SHLIB_SUFFIX))
 
@@ -152,8 +152,7 @@ WISH	= $(TCLSH_ENV) $(WISH_PROG)
 
 SHARED_BUILD	= @SHARED_BUILD@
 
-#INCLUDES	= @PKG_INCLUDES@ @TCL_INCLUDES@
-INCLUDES	= @PKG_INCLUDES@ @TCL_INCLUDES@ @TK_INCLUDES@ @TK_XINCLUDES@
+INCLUDES	= -I. @PKG_INCLUDES@ @TCL_INCLUDES@ @TK_INCLUDES@ @TK_XINCLUDES@
 
 PKG_CFLAGS	= @PKG_CFLAGS@
 
@@ -180,7 +179,7 @@ COMPILE		= $(CC) $(DEFS) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(C
 
 #========================================================================
 # TEA TARGETS.  Please note that the "libraries:" target refers to platform
-# independent files, and the "binaries:" target inclues executable programs and
+# independent files, and the "binaries:" target includes executable programs and
 # platform-dependent libraries.  Modify these targets so that they install
 # the various pieces of your package.  The make and install rules
 # for the BINARIES that you specified above have already been done.
@@ -253,6 +252,14 @@ texture$(SHLIB_SUFFIX): texture.$(OBJEXT) image.$(OBJEXT) $(PKG_STUB_LIB_FILE)
 		$(MAKE_SHARED_LIB) ; \
 	else \
 		$(MAKE) PKG_OBJECTS="texture.$(OBJEXT) image.$(OBJEXT) $(PKG_STUB_LIB_FILE) $(LIBGLU)" $@ ; \
+	fi
+
+pbuffer$(SHLIB_SUFFIX): pbuffer.$(OBJEXT) $(PKG_STUB_LIB_FILE)
+	-match=`expr 'x$(PKG_OBJECTS)' : '.*togl.*'`; \
+	if [ $$match -eq 0 ]; then \
+		$(MAKE_SHARED_LIB) ; \
+	else \
+		$(MAKE) PKG_OBJECTS="pbuffer.$(OBJEXT) $(PKG_STUB_LIB_FILE) $(LIBGLU)" $@ ; \
 	fi
 
 #========================================================================
@@ -351,7 +358,7 @@ $(PKG_STUB_LIB_FILE): $(PKG_STUB_OBJECTS)
 # As necessary, add $(srcdir):$(srcdir)/compat:....
 #========================================================================
 
-VPATH = $(srcdir):$(srcdir)/generic:$(srcdir)/unix:$(srcdir)/win
+VPATH = $(srcdir):Xmu
 
 .c.@OBJEXT@:
 	$(COMPILE) -c `@CYGPATH@ $<` -o $@
@@ -393,7 +400,7 @@ dist: dist-clean
 	chmod 664 $(DIST_DIR)/tclconfig/tcl.m4
 	chmod +x $(DIST_DIR)/tclconfig/install-sh
 
-	list='examples doc generic library mac tests unix win StereoI'; \
+	list='examples doc tests Xmu GL'; \
 	for p in $$list; do \
 	    if test -d $(srcdir)/$$p ; then \
 		mkdir $(DIST_DIR)/$$p; \
@@ -562,4 +569,4 @@ uninstall-binaries:
 .NOEXPORT:
 
 # Additional dependencies
-togl.$(OBJEXT): toglFont.c
+togl.$(OBJEXT): toglFont.c toglAGL.c toglGLX.c toglWGL.c

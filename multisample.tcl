@@ -2,7 +2,7 @@
 # the next line restarts using tclsh \
 exec tclsh "$0" "$@"
 
-# $Id: double.tcl,v 1.11 2009/03/12 23:59:35 gregcouch Exp $
+# $Id: multisample.tcl,v 1.3 2009/03/12 23:59:35 gregcouch Exp $
 
 # Togl - a Tk OpenGL widget
 # Copyright (C) 1996  Brian Paul and Ben Bederson
@@ -10,10 +10,10 @@ exec tclsh "$0" "$@"
 # See the LICENSE file for copyright details.
 
 
-# An Tk/OpenGL widget demo with two windows, one single buffered and the
-# other double buffered.
+# An Tk/OpenGL widget demo with two windows, one aliased and the
+# other multisampled.  Reuse C code from double buffering demo.
 
-package provide double 1.0
+package provide multisample 1.0
 
 # add parent directory to path to find Togl's pkgIndex in current directory
 if { [file exists pkgIndex.tcl] } {
@@ -22,31 +22,31 @@ if { [file exists pkgIndex.tcl] } {
 # following load also loads Tk and Togl packages
 load [file dirname [info script]]/double[info sharedlibextension]
 
-# create ::double namespace
-namespace eval ::double {
+# create ::multisample namespace
+namespace eval ::multisample {
 }
 
-proc double::setup {} {
-    wm title . "Single vs Double Buffering"
+proc multisample::setup {} {
+    wm title . "Multisample vs Aliased"
 
     # create first Togl widget
-    togl .o1 -width 200 -height 200 -rgba true -double false -depth true -ident "Single Buffered" -create double::create_cb -display double::display_cb -reshape double::reshape_cb
+    togl .o1 -width 200 -height 200 -rgba true -double true -depth true -create double::create_cb -display double::display_cb -reshape double::reshape_cb -multisample false -ident Aliased
 
     # create second Togl widget, share display lists with first widget
-    togl .o2 -width 200 -height 200 -rgba true -double true -depth true -ident "Double Buffered" -sharelist "Single Buffered" -create double::create_cb -display double::display_cb -reshape double::reshape_cb
+    togl .o2 -width 200 -height 200 -rgba true -double true -depth true -create double::create_cb -display double::display_cb -reshape double::reshape_cb -multisample true -ident Multisampled -sharelist Aliased
 
-    scale .sx -label {X Axis} -from 0 -to 360 -command {::double::setAngle x} -orient horizontal
-    scale .sy -label {Y Axis} -from 0 -to 360 -command {::double::setAngle y} -orient horizontal
+    scale .sx -label {X Axis} -from 0 -to 360 -command {::multisample::setAngle x} -orient horizontal
+    scale .sy -label {Y Axis} -from 0 -to 360 -command {::multisample::setAngle y} -orient horizontal
     button .btn -text Quit -command exit
 
     bind .o1 <B1-Motion> {
-	::double::motion_event [lindex [%W config -width] 4] \
+	::multisample::motion_event [lindex [%W config -width] 4] \
 		     [lindex [%W config -height] 4] \
 		     %x %y
     }
 
     bind .o2 <B1-Motion> {
-	::double::motion_event [lindex [%W config -width] 4] \
+	::multisample::motion_event [lindex [%W config -width] 4] \
 		     [lindex [%W config -height] 4] \
 		     %x %y
     }
@@ -67,7 +67,7 @@ proc double::setup {} {
 
 # This is called when mouse button 1 is pressed and moved in either of
 # the OpenGL windows.
-proc double::motion_event { width height x y } {
+proc multisample::motion_event { width height x y } {
     .sx set [double::setXrot [expr 360.0 * $y / $height]]
     .sy set [double::setYrot [expr 360.0 * ($width - $x) / $width]]
 
@@ -76,7 +76,7 @@ proc double::motion_event { width height x y } {
 }
 
 # This is called when a slider is changed.
-proc double::setAngle {axis value} {
+proc multisample::setAngle {axis value} {
     global xAngle yAngle zAngle
 
     switch -exact $axis {
@@ -92,5 +92,5 @@ proc double::setAngle {axis value} {
 
 # Execution starts here!
 if { [info script] == $argv0 } {
-	::double::setup
+	::multisample::setup
 }
