@@ -1,8 +1,9 @@
-/* $Id: overlay.c,v 1.7 2005/04/23 07:49:13 gregcouch Exp $ */
+/* $Id: overlay.c,v 1.10 2007/08/03 16:48:50 gregcouch Exp $ */
 
 /* 
  * Togl - a Tk OpenGL widget
  * Copyright (C) 1996-1997  Brian Paul and Ben Bederson
+ * Copyright (C) 2006-2007  Greg Couch
  * See the LICENSE file for copyright details.
  */
 
@@ -11,20 +12,14 @@
  * An example Togl program using an overlay.
  */
 
+#define USE_TOGL_STUBS
 
 #include "togl.h"
 #include <stdlib.h>
 #include <string.h>
 
-
-/* 
- * The following variable is a special hack that is needed in order for
- * Sun shared libraries to be used for Tcl.
- */
-#ifdef SUN
-extern int matherr();
-int    *tclDummyMathPtr = (int *) matherr;
-#endif
+#undef TCL_STORAGE_CLASS
+#define TCL_STORAGE_CLASS DLLEXPORT
 
 
 /* Overlay color indexes: */
@@ -36,12 +31,24 @@ static unsigned long Red, Green;
  * been realized.  Here's where one may do some one-time context setup or
  * initializations.
  */
-void
-create_cb(Togl *togl)
+static int
+create_cb(ClientData clientData, Tcl_Interp *interp, int objc,
+        Tcl_Obj *const *objv)
 {
+    Togl   *togl;
+
+    if (objc != 2) {
+        Tcl_WrongNumArgs(interp, 1, objv, "pathName");
+        return TCL_ERROR;
+    }
+
+    if (Togl_GetToglFromObj(interp, objv[1], &togl) != TCL_OK) {
+        return TCL_ERROR;
+    }
+
     /* allocate overlay color indexes */
-    Red = Togl_AllocColorOverlay(togl, 1.0, 0.0, 0.0);
-    Green = Togl_AllocColorOverlay(togl, 0.0, 1.0, 0.0);
+    Red = Togl_AllocColorOverlay(togl, 1, 0, 0);
+    Green = Togl_AllocColorOverlay(togl, 0, 1, 0);
 
     /* in this demo we always show the overlay */
     if (Togl_ExistsOverlay(togl)) {
@@ -50,6 +57,7 @@ create_cb(Togl *togl)
     } else {
         printf("Sorry, this display doesn't support overlays\n");
     }
+    return TCL_OK;
 }
 
 
@@ -58,18 +66,33 @@ create_cb(Togl *togl)
  * has been resized.  Typically, we call glViewport and perhaps setup the
  * projection matrix.
  */
-void
-reshape_cb(Togl *togl)
+static int
+reshape_cb(ClientData clientData, Tcl_Interp *interp, int objc,
+        Tcl_Obj *const *objv)
 {
-    int     width = Togl_Width(togl);
-    int     height = Togl_Height(togl);
-    float   aspect = (float) width / (float) height;
+    int     width;
+    int     height;
+    float   aspect;
+    Togl   *togl;
+
+    if (objc != 2) {
+        Tcl_WrongNumArgs(interp, 1, objv, "pathName");
+        return TCL_ERROR;
+    }
+
+    if (Togl_GetToglFromObj(interp, objv[1], &togl) != TCL_OK) {
+        return TCL_ERROR;
+    }
+
+    width = Togl_Width(togl);
+    height = Togl_Height(togl);
+    aspect = (float) width / (float) height;
 
     /* Set up viewing for normal plane's context */
     glViewport(0, 0, width, height);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glOrtho(-aspect, aspect, -1.0, 1.0, -1.0, 1.0);
+    glOrtho(-aspect, aspect, -1, 1, -1, 1);
     glMatrixMode(GL_MODELVIEW);
 
     /* Set up viewing for overlay plane's context */
@@ -78,10 +101,11 @@ reshape_cb(Togl *togl)
         glViewport(0, 0, width, height);
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
-        glOrtho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
+        glOrtho(-1, 1, -1, 1, -1, 1);
         glMatrixMode(GL_MODELVIEW);
         Togl_UseLayer(togl, TOGL_NORMAL);
     }
+    return TCL_OK;
 }
 
 
@@ -89,27 +113,29 @@ reshape_cb(Togl *togl)
  * Togl widget overlay display callback.  This is called by Tcl/Tk when the
  * overlay has to be redrawn.
  */
-void
-overlay_display_cb(Togl *togl)
+static int
+overlay_display_cb(ClientData clientData, Tcl_Interp *interp, int objc,
+        Tcl_Obj *const *objv)
 {
     glClear(GL_COLOR_BUFFER_BIT);
 
     glIndexi(Red);
     glBegin(GL_LINES);
-    glVertex2f(-1.0, -1.0);
-    glVertex2f(1.0, 1.0);
-    glVertex2f(-1.0, 1.0);
-    glVertex2f(1.0, -1.0);
+    glVertex2f(-1, -1);
+    glVertex2f(1, 1);
+    glVertex2f(-1, 1);
+    glVertex2f(1, -1);
     glEnd();
 
     glIndexi(Green);
     glBegin(GL_LINE_LOOP);
-    glVertex2f(-0.5, -0.5);
-    glVertex2f(0.5, -0.5);
-    glVertex2f(0.5, 0.5);
-    glVertex2f(-0.5, 0.5);
+    glVertex2f(-0.5f, -0.5f);
+    glVertex2f(0.5f, -0.5f);
+    glVertex2f(0.5f, 0.5f);
+    glVertex2f(-0.5f, 0.5f);
     glEnd();
     glFlush();
+    return TCL_OK;
 }
 
 
@@ -118,8 +144,9 @@ overlay_display_cb(Togl *togl)
  * contents have to be redrawn.  Typically, we clear the color and depth
  * buffers, render our objects, then swap the front/back color buffers.
  */
-void
-display_cb(Togl *togl)
+static int
+display_cb(ClientData clientData, Tcl_Interp *interp, int objc,
+        Tcl_Obj *const *objv)
 {
     glClear(GL_COLOR_BUFFER_BIT);
 
@@ -127,47 +154,39 @@ display_cb(Togl *togl)
 
     glBegin(GL_TRIANGLES);
 
-    glColor3f(1.0, 0.0, 1.0);
-    glVertex2f(-0.5, -0.3);
-    glVertex2f(0.5, -0.3);
-    glVertex2f(0.0, 0.6);
+    glColor3f(1, 0, 1);
+    glVertex2f(-0.5f, -0.3f);
+    glVertex2f(0.5f, -0.3f);
+    glVertex2f(0, 0.6f);
 
-    glColor3f(1.0, 1.0, 0.0);
-    glVertex2f(-0.5 + 0.2, -0.3 - 0.2);
-    glVertex2f(0.5 + 0.2, -0.3 - 0.2);
-    glVertex2f(0.0 + 0.2, 0.6 - 0.2);
+    glColor3f(1, 1, 0);
+    glVertex2f(-0.5f + 0.2f, -0.3f - 0.2f);
+    glVertex2f(0.5f + 0.2f, -0.3f - 0.2f);
+    glVertex2f(0 + 0.2f, 0.6f - 0.2f);
 
-    glColor3f(0.0, 1.0, 1.0);
-    glVertex2f(-0.5 + 0.4, -0.3 - 0.4);
-    glVertex2f(0.5 + 0.4, -0.3 - 0.4);
-    glVertex2f(0.0 + 0.4, 0.6 - 0.4);
+    glColor3f(0, 1, 1);
+    glVertex2f(-0.5f + 0.4f, -0.3f - 0.4f);
+    glVertex2f(0.5f + 0.4f, -0.3f - 0.4f);
+    glVertex2f(0 + 0.4f, 0.6f - 0.4f);
 
     glEnd();
 
     glFlush();
+    return TCL_OK;
 }
 
 
 /* 
- * Called by Tk_Main() to let me initialize the modules (Togl) I will need.
+ * Called by Tcl to let me initialize the modules (Togl) I will need.
  */
-TOGL_EXTERN int
+EXTERN int
 Overlay_Init(Tcl_Interp *interp)
 {
     /* 
-     * Initialize Tcl, Tk, and the Togl widget module.
+     * Initialize Tcl and the Togl widget module.
      */
-#ifdef USE_TCL_STUBS
-    if (Tcl_InitStubs(interp, "8.1", 0) == NULL) {
-        return TCL_ERROR;
-    }
-#endif
-#ifdef USE_TK_STUBS
-    if (Tk_InitStubs(interp, "8.1", 0) == NULL) {
-        return TCL_ERROR;
-    }
-#endif
-    if (Togl_Init(interp) == TCL_ERROR) {
+    if (Tcl_InitStubs(interp, "8.1", 0) == NULL
+            || Togl_InitStubs(interp, "2.0", 0) == NULL) {
         return TCL_ERROR;
     }
 
@@ -175,11 +194,12 @@ Overlay_Init(Tcl_Interp *interp)
      * Specify the C callback functions for widget creation, display,
      * and reshape.
      */
-    Togl_CreateFunc(create_cb);
-    Togl_DisplayFunc(display_cb);
-    Togl_ReshapeFunc(reshape_cb);
+    Tcl_CreateObjCommand(interp, "create_cb", create_cb, NULL, NULL);
+    Tcl_CreateObjCommand(interp, "display_cb", display_cb, NULL, NULL);
+    Tcl_CreateObjCommand(interp, "reshape_cb", reshape_cb, NULL, NULL);
 
-    Togl_OverlayDisplayFunc(overlay_display_cb);
+    Tcl_CreateObjCommand(interp, "overlay_display_cb", overlay_display_cb, NULL,
+            NULL);
 
     /* 
      * Make a new Togl widget command so the Tcl code can set a C variable.

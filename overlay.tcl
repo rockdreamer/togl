@@ -1,49 +1,37 @@
 #!/bin/sh
-# the next line restarts using wish \
-exec wish "$0" "$@"
+# the next line restarts using tclsh \
+exec tclsh "$0" "$@"
 
-# $Id: overlay.tcl,v 1.4 2001/12/20 13:59:31 beskow Exp $
+# $Id: overlay.tcl,v 1.7 2007/08/03 16:48:50 gregcouch Exp $
 
 # Togl - a Tk OpenGL widget
 # Copyright (C) 1996  Brian Paul and Ben Bederson
+# Copyright (C) 2006-2007  Greg Couch
 # See the LICENSE file for copyright details.
-
-
-# $Log: overlay.tcl,v $
-# Revision 1.4  2001/12/20 13:59:31  beskow
-# Improved error-handling in togl.c in case of window creation failure
-# Added pkgIndex target to makefile
-# Updated documentation to reflect stubs-interface (Togl.html + new README.stubs)
-# Added tk8.4a3 headers
-# Removed obsolete Tk internal headers
-#
-# Revision 1.3  2001/01/29 18:11:53  brianp
-# Jonas Beskow's changes to use Tcl/Tk stub interface
-#
-# Revision 1.2  1998/01/24 14:05:50  brianp
-# added quit button (Ben Bederson)
-#
-# Revision 1.1  1997/03/07 01:26:38  brianp
-# Initial revision
-#
-#
 
 
 # A Tk/OpenGL widget demo using an overlay.
 
+# add parent directory to path to find Togl's pkgIndex in current directory
+if { [file exists pkgIndex.tcl] } {
+    set auto_path [linsert $auto_path 0 ..]
+}
+# following load also loads Tk and Togl packages
 load [file dirname [info script]]/overlay[info sharedlibextension]
 
 proc setup {} {
     wm title . "Overlay demo"
 
-    togl .win -width 200 -height 200  -rgba true -double false -overlay true
-    button .btn  -text Quit -command exit
+    togl .win -width 200 -height 200 -rgba true -double false -overlay true -create create_cb -reshape reshape_cb -display display_cb -overlaydisplay overlay_display_cb
+    button .btn -text Quit -command exit
 
     pack .win -expand true -fill both
     pack .btn -expand true -fill both
 }
 
 
-
 # Execution starts here!
-setup
+# Execution starts here!
+if { [info script] == $argv0 } {
+	setup
+}

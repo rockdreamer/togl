@@ -1,91 +1,82 @@
 #!/bin/sh
-# the next line restarts using wish \
-exec wish "$0" "$@"
+# the next line restarts using tclsh \
+exec tclsh "$0" "$@"
 
-# $Id: stereo.tcl,v 1.4 2004/12/21 05:28:39 gregcouch Exp $
+# $Id: stereo.tcl,v 1.7 2007/08/03 16:48:50 gregcouch Exp $
 
 # Togl - a Tk OpenGL widget
 # Copyright (C) 1996  Brian Paul and Ben Bederson
+# Copyright (C) 2006-2007  Greg Couch
 # See the LICENSE file for copyright details.
 
-
-# $Log: stereo.tcl,v $
-# Revision 1.4  2004/12/21 05:28:39  gregcouch
-# Apply outstanding patches and Mac OS X support.
-#
-# Revision 1.3  2001/12/20 13:59:31  beskow
-# Improved error-handling in togl.c in case of window creation failure
-# Added pkgIndex target to makefile
-# Updated documentation to reflect stubs-interface (Togl.html + new README.stubs)
-# Added tk8.4a3 headers
-# Removed obsolete Tk internal headers
-#
-# Revision 1.2  2001/01/29 18:11:53  brianp
-# Jonas Beskow's changes to use Tcl/Tk stub interface
-#
-# Revision 1.1  1997/10/01 02:53:12  brianp
-# Initial revision
-#
-#
-# Revision 1.1  1997/9/28 18:54:46  Ben Evans
-# Initial revision. Based on double.tcl
-#
-
-
-# An Tk/OpenGL widget demo with two windows, one single buffered and the
-# other double buffered.
-
+# add parent directory to path to find Togl's pkgIndex in current directory
+if { [file exists pkgIndex.tcl] } {
+    set auto_path [linsert $auto_path 0 ..]
+}
+# following load also loads Tk and Togl packages
 load [file dirname [info script]]/stereo[info sharedlibextension]
 
-proc setup {} {
-    global scale
-    set scale 1.0
-    wm title . "Full Screen Stereo Buffering"
-
-    frame .f1
-    togl .f1.o1 -width 200 -height 200  -rgba true  -stereo true -double true -depth true -ident "stereo buffer"
-
-    scale  .sx   -label {X Axis} -from 0 -to 360 -command {setAngle x} -orient horizontal
-    scale  .sy   -label {Y Axis} -from 0 -to 360 -command {setAngle y} -orient horizontal
-    button .btn  -text Quit -command exit
-
-    bind .f1.o1 <B1-Motion> {
-	motion_event [lindex [%W config -width] 4] \
-		     [lindex [%W config -height] 4] \
-		     %x %y
-    }
-
-    bind .f1.o1 <ButtonPress-2> {
-        set startx %x
-        set starty %y
-        set scale0 $scale
-    }
-
-    bind .f1.o1 <B1-B2-Motion> {
-        set q [ expr ($starty - %y) / 400.0 ]
-        set scale [expr $scale0 * exp($q)]
-        .f1.o1 scale $scale
-    }
-
-    pack .f1.o1  -side left -padx 3 -pady 3 -fill both -expand t
-    pack .f1  -fill both -expand t
-    pack .sx  -fill x
-    pack .sy  -fill x
-    pack .btn -fill x
-
-    if {[string first $::tcl_platform(os) IRIX] != -1} {
-        puts "use /usr/gfx/setmon -n 60 to reset display and /usr/gfx/setmon -n STR_RECT to put in display in stereo mode"
-    }
-
+# create ::stereo namespace
+namespace eval ::stereo {
 }
 
+proc stereo::setup {} {
+	grid rowconfigure . 0 -weight 1 -minsize 200p
+	grid columnconfigure . 1 -weight 1 -minsize 200p
+	labelframe .c -text "Stereo mode:"
+	grid .c -sticky nw -padx 2 -pady 2 -ipadx 2 -ipady 1
+	# add "nvidia" to list below when it works
+	foreach {b} {none native sgioldstyle anaglyph cross-eye wall-eye DTI "left eye" "right eye" } {
+		set name [string map {- _ " " _} $b]
+		button .c.b$name -text "$b" -command "::stereo::makeGraphics {$b}"
+		pack .c.b$name -fill x -padx 2 -pady 1
+	}
+	scale .sx -label {X Axis} -from 0 -to 360 -command {::stereo::setAngle x} -orient horizontal
+	grid .sx -columnspan 2 -sticky ew
+	scale .sy -label {Y Axis} -from 0 -to 360 -command {::stereo::setAngle y} -orient horizontal
+	grid .sy -columnspan 2 -sticky ew
+	if {[string first IRIX $::tcl_platform(os)] != -1} {
+		label .irix -justify left -wraplength 250p -text "Use /usr/gfx/setmon or /usr/bin/X11/xsetmon to change video mode for native stereo (eg., 1024x768_120s) or sgioldstyle stereo (eg., str_bot) and back."
+		grid .irix -sticky new -columnspan 2
+	}
+	button .quit -text Close -command exit
+	grid .quit -sticky se -columnspan 2 -padx 2 -pady 2
+	frame .f -relief groove -borderwidth 2 -bg black
+	grid .f -row 0 -column 1 -sticky news
+	label .f.gr -wraplength 100p -bg black -fg white -text "To start, choose a stereo mode from the choices on the left."
+	pack .f.gr -anchor center -expand 1
+	bind . <Key-Escape> {exit}
+}
 
+proc stereo::makeGraphics {mode} {
+	destroy .f.gr
+	set name ".f.gr"
+	set width 200
+	set height 200
+	if { "$mode" == "nvidia" } {
+		set mode "nvidia consumer stereo"
+		set name ".gr"
+		foreach s [grid slaves .] {
+			grid forget $s
+		}
+		wm attributes . -fullscreen 1
+		set width [winfo screenwidth .]
+		set height [winfo screenheight .]
+	}
+	if { [catch { togl $name -width $width -height $height -rgba true -stereo "$mode" -double true -depth true -ident "$mode" -create create_cb -display display_cb -reshape reshape_cb -eyeseparation 0.05 -convergence 2.0 } error] } {
+		label $name -wraplength 100p -bg black -fg white -text "$error\n\nMake another choice from the stereo modes on the left."
+	}
+	pack $name -expand 1 -fill both
+	bind $name <B1-Motion> {
+		::stereo::motion_event %W [lindex [%W config -width] 4] \
+		     [lindex [%W config -height] 4] %x %y
+	}
+}
 
-# This is called when mouse button 1 is pressed and moved in either of
-# the OpenGL windows.
-proc motion_event { width height x y } {
-    .f1.o1 setXrot [expr 360.0 * $y / $height]
-    .f1.o1 setYrot [expr 360.0 * ($width - $x) / $width]
+# This is called when mouse button 1 is pressed and moved
+proc stereo::motion_event { widget width height x y } {
+    setXrot $widget [expr 360.0 * $y / $height]
+    setYrot $widget [expr 360.0 * ($width - $x) / $width]
 
 #    .sx set [expr 360.0 * $y / $height]
 #    .sy set [expr 360.0 * ($width - $x) / $width]
@@ -95,14 +86,18 @@ proc motion_event { width height x y } {
 }
 
 # This is called when a slider is changed.
-proc setAngle {axis value} {
+proc stereo::setAngle {axis value} {
     global xAngle yAngle zAngle
 
-    switch -exact $axis {
-	x {.f1.o1 setXrot $value}
-	y {.f1.o1 setYrot $value}
+    # catch because .f.gr might be a label instead of a Togl widget
+    catch {
+	    switch -exact $axis {
+		x {setXrot .f.gr $value}
+		y {setYrot .f.gr $value}
+	    }
     }
 }
 
-# Execution starts here!
-setup
+if { [info script] == $argv0 } {
+	::stereo::setup
+}

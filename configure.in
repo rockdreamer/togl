@@ -3,7 +3,7 @@ dnl	This file is an input file used by the GNU "autoconf" program to
 dnl	generate the file "configure", which is run during Tcl installation
 dnl	to configure the system for the local environment.
 #
-# RCS: @(#) $Id: configure.in,v 1.6 2006/01/06 00:09:00 gregcouch Exp $
+# RCS: @(#) $Id: configure.in,v 1.12 2007/08/03 16:48:47 gregcouch Exp $
 
 #-----------------------------------------------------------------------
 # Sample configure.in for Tcl Extensions.  The only places you should
@@ -19,7 +19,7 @@ dnl	to configure the system for the local environment.
 # so you can encode the package version directly into the source files.
 #-----------------------------------------------------------------------
 
-AC_INIT([Togl], [1.7])
+AC_INIT([Togl], [2.0])
 
 #--------------------------------------------------------------------
 # Call TEA_INIT as the first TEA_ macro to set up initial vars.
@@ -27,7 +27,7 @@ AC_INIT([Togl], [1.7])
 # as well as PKG_LIB_FILE and PKG_STUB_LIB_FILE.
 #--------------------------------------------------------------------
 
-TEA_INIT([3.4])
+TEA_INIT([3.6])
 
 AC_CONFIG_AUX_DIR(tclconfig)
 
@@ -71,13 +71,17 @@ TEA_SETUP_COMPILER
 # and PKG_TCL_SOURCES.
 #-----------------------------------------------------------------------
 
-TEA_ADD_SOURCES([togl.c])
+TOGL_ENABLE_STUBS
+
+TEA_ADD_SOURCES([togl.c toglProcAddr.c toglStubInit.c])
 # togl_ws.h is added in Makefile.in because it is generated
-TEA_ADD_HEADERS([togl.h])
+TEA_ADD_HEADERS([togl.h toglDecls.h])
 TEA_ADD_INCLUDES([])
 TEA_ADD_LIBS([])
 TEA_ADD_CFLAGS([])
-TEA_ADD_STUB_SOURCES([])
+if test "${USE_STUBS}" = "1" ; then
+	TEA_ADD_STUB_SOURCES([toglStubLib.c])
+fi
 TEA_ADD_TCL_SOURCES([])
 
 #--------------------------------------------------------------------
@@ -96,11 +100,14 @@ TEA_ADD_TCL_SOURCES([])
 
 if test "${TEA_PLATFORM}" = "windows" ; then
     AC_DEFINE(BUILD_togl, 1, [Build windows export dll])
-    CLEANFILES="pkgIndex.tcl togl_ws.h *.lib *.dll *.exp *.ilk *.pdb vc*.pch"
+    CLEANFILES="*.lib *.dll *.exp *.ilk *.pdb vc*.pch"
+    if test "$GCC" != "yes" ; then
+	    TEA_ADD_LIBS([StereoI/StereoI.lib])
+    fi
     #TEA_ADD_SOURCES([win/winFile.c])
     #TEA_ADD_INCLUDES([-I\"$(${CYGPATH} ${srcdir}/win)\"])
 else
-    CLEANFILES="pkgIndex.tcl togl_ws.h so_locations"
+    CLEANFILES="so_locations"
     #TEA_ADD_SOURCES([unix/unixFile.c])
     #TEA_ADD_LIBS([-lsuperfly])
 fi
@@ -115,18 +122,35 @@ AC_SUBST(CLEANFILES)
 # This MUST be called after TEA_LOAD_TCLCONFIG / TEA_LOAD_TKCONFIG
 #--------------------------------------------------------------------
 
-TEA_PUBLIC_TCL_HEADERS
-#TEA_PRIVATE_TCL_HEADERS
+# find autostereo header, lib, and daemon
+AC_ARG_WITH([autostereo],
+	[AS_HELP_STRING([--with-autostereo],
+		[directory with autostereo source (for SGI)])],
+	[with_autostereo=${withval}])
+AC_ARG_WITH([autostereod],
+	[AS_HELP_STRING([--with-autostereod],
+		[path to autostereod daemon (for SGI)])],
+	[with_autostereod=${withval}])
+AC_ARG_VAR([AUTOSTEREOD], [Path to autostereod for SGI IRIX computers])
 
-#TEA_PUBLIC_TK_HEADERS
-TEA_PRIVATE_TK_HEADERS
-TEA_PATH_X
+AC_MSG_CHECKING([for autostereo directory])
+if test x"${with_autostereo}" != x ; then
+	if test -f "${with_autostereo}/lib/autostereo.h" ; then
+		with_autostereo=`(cd ${with_autostereo}; pwd)`
+		TEA_ADD_INCLUDES([-I${with_autostereo}/lib])
+		TEA_ADD_LIBS([-L${with_autostereo}/lib -lautostereo])
+		AC_DEFINE_UNQUOTED(HAVE_AUTOSTEREO, 1,
+			[Define this if you have the autostereo header])
+	else
+		AC_MSG_ERROR([${with_autostereo} directory doesn't contain lib/autostereo.h])
+	fi
+fi
 
-#--------------------------------------------------------------------
-# __CHANGE__
+AC_PATH_PROG([AUTOSTEREOD], [autostereod], [],
+			[`eval \"echo $sbindir\"`:$PATH:/sbin:/usr/sbin])
+
+
 # Choose OpenGL platform
-#--------------------------------------------------------------------
-
 case "${TEA_WINDOWINGSYSTEM}" in
 	aqua)
 		AC_SUBST(TOGL_WINDOWINGSYSTEM,TOGL_AGL)
@@ -145,7 +169,9 @@ case "${TEA_WINDOWINGSYSTEM}" in
 		if test "$GCC" = "yes" ; then
 			LIBGLU=-lglu32
 		else
+			# assume Microsoft compiler
 			LIBGLU=glu32.lib
+			TEA_ADD_CFLAGS([-TP])
 		fi
 		;;
 	*)
@@ -153,6 +179,15 @@ case "${TEA_WINDOWINGSYSTEM}" in
 		;;
 esac
 AC_SUBST(LIBGLU)
+AC_SUBST(TEA_WINDOWINGSYSTEM)
+
+# find Tcl, Tk, and X11 headers
+#TEA_PUBLIC_TCL_HEADERS
+TEA_PRIVATE_TCL_HEADERS
+
+#TEA_PUBLIC_TK_HEADERS
+TEA_PRIVATE_TK_HEADERS
+TEA_PATH_X
 
 #--------------------------------------------------------------------
 # Check whether --enable-threads or --disable-threads was given.
@@ -191,8 +226,10 @@ TEA_ENABLE_SYMBOLS
 # link against the non-stubbed Tcl library.  Add Tk too if necessary.
 #--------------------------------------------------------------------
 
-AC_DEFINE(USE_TCL_STUBS, 1, [Use Tcl stubs])
-AC_DEFINE(USE_TK_STUBS, 1, [Use Tk stubs])
+if test "${USE_STUBS}" = "1" ; then
+	AC_DEFINE(USE_TCL_STUBS, 1, [Use Tcl stubs])
+	AC_DEFINE(USE_TK_STUBS, 1, [Use Tk stubs])
+fi
 
 #--------------------------------------------------------------------
 # This macro generates a line to use when building a library.  It
@@ -201,6 +238,10 @@ AC_DEFINE(USE_TK_STUBS, 1, [Use Tk stubs])
 #--------------------------------------------------------------------
 
 TEA_MAKE_LIB
+
+if test "${USE_STUBS}" = "0" ; then
+	SHLIB_LD_LIBS=`echo "$SHLIB_LD_LIBS" | sed -e 's!stub!!g'`
+fi
 
 #--------------------------------------------------------------------
 # Determine the name of the tclsh and/or wish executables in the

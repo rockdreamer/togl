@@ -9,6 +9,6 @@ typedef struct _TK_RGBImageRec
     unsigned char *data;
 } TK_RGBImageRec;
 
-extern TK_RGBImageRec *tkRGBImageLoad(char *fileName);
+extern TK_RGBImageRec *tkRGBImageLoad(const char *fileName);
 
 #endif

@@ -12,7 +12,7 @@
 # See the file "license.terms" for information on usage and redistribution
 # of this file, and for a DISCLAIMER OF ALL WARRANTIES.
 #
-# RCS: @(#) $Id: Makefile.in,v 1.7 2006/01/06 00:09:00 gregcouch Exp $
+# RCS: @(#) $Id: Makefile.in,v 1.21 2008/04/21 23:42:53 gregcouch Exp $
 
 #========================================================================
 # Add additional lines to handle any additional AC_SUBST cases that
@@ -24,9 +24,9 @@ SHLIB_SUFFIX	= @SHLIB_SUFFIX@
 MATH_LIBS	= @MATH_LIBS@
 LIBGLU		= @LIBGLU@
 
-DEMO_SRCS	= double.c gears.c index.c overlay.c stereo.c texture.c
-DEMO_OBJS	= $(DEMO_SRCS:.c=.$(OBJEXT))
-DEMO_SHLIBS	= $(DEMO_SRCS:.c=$(SHLIB_SUFFIX))
+EXAMPLE_SRCS	= double.c gears.c index.c overlay.c stereo.c texture.c
+EXAMPLE_OBJS	= $(EXAMPLE_SRCS:.c=.$(OBJEXT))
+EXAMPLE_SHLIBS	= $(EXAMPLE_SRCS:.c=$(SHLIB_SUFFIX))
 
 #========================================================================
 # Nothing of the variables below this line should need to be changed.
@@ -69,8 +69,9 @@ PKG_HEADERS	= @PKG_HEADERS@ togl_ws.h
 PKG_LIB_FILE	= @PKG_LIB_FILE@
 PKG_STUB_LIB_FILE = @PKG_STUB_LIB_FILE@
 
-lib_BINARIES	= $(PKG_LIB_FILE)
-BINARIES	= $(lib_BINARIES)
+pkglib_BINARIES	= $(PKG_LIB_FILE)
+lib_BINARIES	= $(PKG_STUB_LIB_FILE)
+BINARIES	= $(pkglib_BINARIES) $(lib_BINARIES)
 
 SHELL		= @SHELL@
 
@@ -80,9 +81,10 @@ exec_prefix	= @exec_prefix@
 
 bindir		= @bindir@
 libdir		= @libdir@
+includedir	= @includedir@
+datarootdir	= @datarootdir@
 datadir		= @datadir@
 mandir		= @mandir@
-includedir	= @includedir@
 
 DESTDIR		=
 
@@ -103,7 +105,6 @@ PACKAGE_VERSION	= @PACKAGE_VERSION@
 CC		= @CC@
 CFLAGS_DEFAULT	= @CFLAGS_DEFAULT@
 CFLAGS_WARNING	= @CFLAGS_WARNING@
-CLEANFILES	= @CLEANFILES@ $(DEMO_OBJS) $(DEMO_SHLIBS)
 EXEEXT		= @EXEEXT@
 LDFLAGS_DEFAULT	= @LDFLAGS_DEFAULT@
 MAKE_LIB	= @MAKE_LIB@
@@ -162,9 +163,10 @@ PKG_CFLAGS	= @PKG_CFLAGS@
 # you do not compile with a similar machine setup as the Tcl core was
 # compiled with.
 #DEFS		= $(TCL_DEFS) @DEFS@ $(PKG_CFLAGS)
-DEFS		= @DEFS@ $(PKG_CFLAGS)
+DEFS		= @DEFS@ -DAUTOSTEREOD=\"@AUTOSTEREOD@\" $(PKG_CFLAGS)
 
-CONFIG_CLEAN_FILES = Makefile
+CONFIG_CLEAN_FILES = Makefile pkgIndex.tcl togl_ws.h
+CLEANFILES	= @CLEANFILES@ $(EXAMPLE_OBJS) $(EXAMPLE_SHLIBS)
 
 CPPFLAGS	= @CPPFLAGS@
 LIBS		= @PKG_LIBS@ @LIBS@
@@ -197,33 +199,68 @@ binaries: $(BINARIES)
 
 libraries:
 
-
 #========================================================================
-# Demo section.  These are binaries because we don't want to install them.
+# Example section.  These are examples because we don't want to install them.
 # And they're not tests because we currently have no automatic way to see
 # if they work.
 #========================================================================
 
-demos: $(DEMO_SHLIBS)
+examples: $(EXAMPLE_SHLIBS)
 
-double$(SHLIB_SUFFIX): double.$(OBJEXT) togl.$(OBJEXT)
-	$(SHLIB_LD) -o $@ double.$(OBJEXT) togl.$(OBJEXT) $(SHLIB_LD_LIBS)
+double$(SHLIB_SUFFIX): double.$(OBJEXT) $(PKG_STUB_LIB_FILE)
+	-match=`expr 'x$(PKG_OBJECTS)' : '.*togl.*'`; \
+	if [ $$match -eq 0 ]; then \
+		$(MAKE_SHARED_LIB) ; \
+	else \
+		$(MAKE) PKG_OBJECTS="double.$(OBJEXT) $(PKG_STUB_LIB_FILE)" $@ ; \
+	fi
 
-gears$(SHLIB_SUFFIX): gears.$(OBJEXT) togl.$(OBJEXT)
-	$(SHLIB_LD) -o $@ gears.$(OBJEXT) togl.$(OBJEXT) $(SHLIB_LD_LIBS) $(MATH_LIBS)
+gears$(SHLIB_SUFFIX): gears.$(OBJEXT) $(PKG_STUB_LIB_FILE)
+	-match=`expr 'x$(PKG_OBJECTS)' : '.*togl.*'`; \
+	if [ $$match -eq 0 ]; then \
+		$(MAKE_SHARED_LIB) ; \
+	else \
+		$(MAKE) PKG_OBJECTS="gears.$(OBJEXT) $(PKG_STUB_LIB_FILE)" $@ ; \
+	fi
 
-index$(SHLIB_SUFFIX): index.$(OBJEXT) togl.$(OBJEXT)
-	$(SHLIB_LD) -o $@ index.$(OBJEXT) togl.$(OBJEXT) $(SHLIB_LD_LIBS)
+index$(SHLIB_SUFFIX): index.$(OBJEXT) $(PKG_STUB_LIB_FILE)
+	-match=`expr 'x$(PKG_OBJECTS)' : '.*togl.*'`; \
+	if [ $$match -eq 0 ]; then \
+		$(MAKE_SHARED_LIB) ; \
+	else \
+		$(MAKE) PKG_OBJECTS="index.$(OBJEXT) $(PKG_STUB_LIB_FILE)" $@ ; \
+	fi
 
-overlay$(SHLIB_SUFFIX): overlay.$(OBJEXT) togl.$(OBJEXT)
-	$(SHLIB_LD) -o $@ overlay.$(OBJEXT) togl.$(OBJEXT) $(SHLIB_LD_LIBS)
+overlay$(SHLIB_SUFFIX): overlay.$(OBJEXT) $(PKG_STUB_LIB_FILE)
+	-match=`expr 'x$(PKG_OBJECTS)' : '.*togl.*'`; \
+	if [ $$match -eq 0 ]; then \
+		$(MAKE_SHARED_LIB) ; \
+	else \
+		$(MAKE) PKG_OBJECTS="overlay.$(OBJEXT) $(PKG_STUB_LIB_FILE)" $@ ; \
+	fi
 
-stereo$(SHLIB_SUFFIX): stereo.$(OBJEXT) togl.$(OBJEXT)
-	$(SHLIB_LD) -o $@ stereo.$(OBJEXT) togl.$(OBJEXT) $(SHLIB_LD_LIBS)
+stereo$(SHLIB_SUFFIX): stereo.$(OBJEXT) $(PKG_STUB_LIB_FILE)
+	-match=`expr 'x$(PKG_OBJECTS)' : '.*togl.*'`; \
+	if [ $$match -eq 0 ]; then \
+		$(MAKE_SHARED_LIB) ; \
+	else \
+		$(MAKE) PKG_OBJECTS="stereo.$(OBJEXT) $(PKG_STUB_LIB_FILE)" $@ ; \
+	fi
 
-texture$(SHLIB_SUFFIX): texture.$(OBJEXT) image.$(OBJEXT) togl.$(OBJEXT)
-	$(SHLIB_LD) -o $@ texture.$(OBJEXT) image.$(OBJEXT) \
-	togl.$(OBJEXT) $(LIBGLU) $(SHLIB_LD_LIBS)
+texture$(SHLIB_SUFFIX): texture.$(OBJEXT) image.$(OBJEXT) $(PKG_STUB_LIB_FILE)
+	-match=`expr 'x$(PKG_OBJECTS)' : '.*togl.*'`; \
+	if [ $$match -eq 0 ]; then \
+		$(MAKE_SHARED_LIB) ; \
+	else \
+		$(MAKE) PKG_OBJECTS="texture.$(OBJEXT) image.$(OBJEXT) $(PKG_STUB_LIB_FILE) $(LIBGLU)" $@ ; \
+	fi
+
+#========================================================================
+# Stub section.
+#========================================================================
+
+toglDecls.h toglStubInit.c: togl.decls
+	$(TCLSH) `@CYGPATH@ $(TCL_SRC_DIR)/tools/genStubs.tcl` . togl.decls
 
 #========================================================================
 # Your doc target should differentiate from doc builds (by the developer)
@@ -252,7 +289,7 @@ install-libraries: libraries
 	@list='$(PKG_HEADERS)'; for i in $$list; do \
 	    echo "Installing $(srcdir)/$$i" ; \
 	    $(INSTALL_DATA) $(srcdir)/$$i $(DESTDIR)$(includedir) ; \
-	done;
+	done
 
 #========================================================================
 # Install documentation.  Unix manpages should go in the $(mandir)
@@ -324,27 +361,31 @@ VPATH = $(srcdir):$(srcdir)/generic:$(srcdir)/unix:$(srcdir)/win
 # You may need to tweak this target to make it work correctly.
 #========================================================================
 
-#COMPRESS	= tar cvf $(PKG_DIR).tar $(PKG_DIR); compress $(PKG_DIR).tar
-COMPRESS	= gtar zcvf $(PKG_DIR).tar.gz $(PKG_DIR)
-DIST_ROOT	= /tmp/dist
+COMPRESS	= tar zcvf $(PKG_DIR)-src.tar.gz $(PKG_DIR)
+DIST_ROOT	= /tmp/togl-dist
 DIST_DIR	= $(DIST_ROOT)/$(PKG_DIR)
+BINPKG_DIR	= $(PKG_DIR)-@TCL_VERSION@-$(subst Darwin,MacOSX,$(subst CYGWIN,Windows,$(shell uname -s | sed -e 's/[-_].*//')))
+BINDIST_DIR	= $(DIST_ROOT)/$(BINPKG_DIR)
 
 dist-clean:
-	rm -rf $(DIST_DIR) $(DIST_ROOT)/$(PKG_DIR).tar.*
+	rm -rf $(DIST_DIR) $(DIST_ROOT)/$(PKG_DIR)*
 
 dist: dist-clean
 	mkdir -p $(DIST_DIR)
-	cp -p $(srcdir)/ChangeLog $(srcdir)/README* $(srcdir)/license* \
+	cp -p $(srcdir)/README* $(srcdir)/LICENSE* $(srcdir)/togl.decls \
+		$(srcdir)/*.py $(srcdir)/*.tcl \
 		$(srcdir)/aclocal.m4 $(srcdir)/configure $(srcdir)/*.in \
+		ben.rgb tree2.rgba \
 		$(DIST_DIR)/
-	chmod 664 $(DIST_DIR)/Makefile.in $(DIST_DIR)/aclocal.m4
+	chmod 664 $(DIST_DIR)/*
 	chmod 775 $(DIST_DIR)/configure $(DIST_DIR)/configure.in
 
 	for i in $(srcdir)/*.[ch]; do \
 	    if [ -f $$i ]; then \
 		cp -p $$i $(DIST_DIR)/ ; \
 	    fi; \
-	done;
+	done
+	cd $(DIST_DIR); rm -f $(CONFIG_CLEAN_FILES)
 
 	mkdir $(DIST_DIR)/tclconfig
 	cp $(srcdir)/tclconfig/install-sh $(srcdir)/tclconfig/tcl.m4 \
@@ -352,7 +393,7 @@ dist: dist-clean
 	chmod 664 $(DIST_DIR)/tclconfig/tcl.m4
 	chmod +x $(DIST_DIR)/tclconfig/install-sh
 
-	list='demos doc generic library mac tests unix win'; \
+	list='examples doc generic library mac tests unix win StereoI'; \
 	for p in $$list; do \
 	    if test -d $(srcdir)/$$p ; then \
 		mkdir $(DIST_DIR)/$$p; \
@@ -361,6 +402,25 @@ dist: dist-clean
 	done
 
 	(cd $(DIST_ROOT); $(COMPRESS);)
+
+bindist-clean:
+	rm -rf $(BINDIST_DIR) $(DIST_ROOT)/$(PKG_DIR)*
+
+bindist: all bindist-clean
+	mkdir -p $(BINDIST_DIR)
+	$(MAKE) prefix=$(BINDIST_DIR) exec_prefix=$(BINDIST_DIR) install
+	$(INSTALL_DATA) README.bin $(BINDIST_DIR)/README.txt
+	mkdir -p $(BINDIST_DIR)/doc
+	@list='doc/*.html doc/*.js'; for i in $$list; do \
+	    echo "Installing $$i"; \
+	    rm -f $(BINDIST_DIR)/doc/`basename $$i`; \
+	    $(INSTALL_DATA) $$i $(BINDIST_DIR)/doc ; \
+	done
+	if [ @TOGL_WINDOWINGSYSTEM@ == TOGL_WGL ]; then \
+		(cd $(DIST_ROOT); zip -rDX9 $(BINPKG_DIR).zip $(BINPKG_DIR)); \
+	else \
+		(cd $(DIST_ROOT); tar zcvf $(BINPKG_DIR).tar.gz $(BINPKG_DIR)); \
+	fi
 
 #========================================================================
 # End of user-definable section
@@ -393,8 +453,31 @@ distclean: clean
 #========================================================================
 
 install-lib-binaries: binaries
-	@mkdir -p $(DESTDIR)$(pkglibdir)
+	@mkdir -p $(DESTDIR)$(libdir)
 	@list='$(lib_BINARIES)'; for p in $$list; do \
+	  if test -f $$p; then \
+	    echo " $(INSTALL_PROGRAM) $$p $(DESTDIR)$(libdir)/$$p"; \
+	    $(INSTALL_PROGRAM) $$p $(DESTDIR)$(libdir)/$$p; \
+	    stub=`echo $$p|sed -e "s/.*\(stub\).*/\1/"`; \
+	    if test "x$$stub" = "xstub"; then \
+		echo " $(RANLIB_STUB) $(DESTDIR)$(libdir)/$$p"; \
+		$(RANLIB_STUB) $(DESTDIR)$(libdir)/$$p; \
+	    else \
+		echo " $(RANLIB) $(DESTDIR)$(libdir)/$$p"; \
+		$(RANLIB) $(DESTDIR)$(libdir)/$$p; \
+	    fi; \
+	    ext=`echo $$p|sed -e "s/.*\.//"`; \
+	    if test "x$$ext" = "xdll"; then \
+		lib=`basename $$p|sed -e 's/.[^.]*$$//'`.lib; \
+		if test -f $$lib; then \
+		    echo " $(INSTALL_DATA) $$lib $(DESTDIR)$(libdir)/$$lib"; \
+	            $(INSTALL_DATA) $$lib $(DESTDIR)$(libdir)/$$lib; \
+		fi; \
+	    fi; \
+	  fi; \
+	done
+	@mkdir -p $(DESTDIR)$(pkglibdir)
+	@list='$(pkglib_BINARIES)'; for p in $$list; do \
 	  if test -f $$p; then \
 	    echo " $(INSTALL_PROGRAM) $$p $(DESTDIR)$(pkglibdir)/$$p"; \
 	    $(INSTALL_PROGRAM) $$p $(DESTDIR)$(pkglibdir)/$$p; \
@@ -426,6 +509,11 @@ install-lib-binaries: binaries
 	@if test "x$(SHARED_BUILD)" = "x1"; then \
 	    echo " Install pkgIndex.tcl $(DESTDIR)$(pkglibdir)"; \
 	    $(INSTALL_DATA) pkgIndex.tcl $(DESTDIR)$(pkglibdir); \
+	    echo " Install LICENSE $(DESTDIR)$(pkglibdir)"; \
+	    $(INSTALL_DATA) LICENSE $(DESTDIR)$(pkglibdir); \
+	else \
+	    echo " Install LICENSE.togl $(DESTDIR)$(libdir)"; \
+	    $(INSTALL_DATA) LICENSE $(DESTDIR)$(libdir)/LICENSE.togl; \
 	fi
 
 #========================================================================
@@ -453,8 +541,11 @@ Makefile: $(srcdir)/Makefile.in  $(top_builddir)/config.status
 	  && CONFIG_FILES=$@ CONFIG_HEADERS= $(SHELL) ./config.status
 
 uninstall-binaries:
-	list='$(lib_BINARIES)'; for p in $$list; do \
+	list='$(pkglib_BINARIES)'; for p in $$list; do \
 	  rm -f $(DESTDIR)$(pkglibdir)/$$p; \
+	done
+	list='$(lib_BINARIES)'; for p in $$list; do \
+	  rm -f $(DESTDIR)$(libdir)/$$p; \
 	done
 	list='$(PKG_TCL_SOURCES)'; for p in $$list; do \
 	  p=`basename $$p`; \
@@ -469,3 +560,6 @@ uninstall-binaries:
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.
 .NOEXPORT:
+
+# Additional dependencies
+togl.$(OBJEXT): toglFont.c

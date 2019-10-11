@@ -1,27 +1,24 @@
-/* $Id: double.c,v 1.14 2005/04/23 07:49:13 gregcouch Exp $ */
+/* $Id: double.c,v 1.19 2008/04/17 00:13:42 gregcouch Exp $ */
 
 /* 
  * Togl - a Tk OpenGL widget
  * Copyright (C) 1996-1997  Brian Paul and Ben Bederson
+ * Copyright (C) 2006-2007  Greg Couch
  * See the LICENSE file for copyright details.
  */
+
+#define USE_TOGL_STUBS
 
 #include "togl.h"
 #include <stdlib.h>
 #include <string.h>
 
-/* 
- * The following variable is a special hack that is needed in order for
- * Sun shared libraries to be used for Tcl.
- */
-#ifdef SUN
-extern int matherr();
-int    *tclDummyMathPtr = (int *) matherr;
-#endif
+#undef TCL_STORAGE_CLASS
+#define TCL_STORAGE_CLASS DLLEXPORT
 
-static GLuint FontBase;
-static float xAngle = 0.0, yAngle = 0.0, zAngle = 0.0;
-static GLfloat CornerX, CornerY, CornerZ;       /* where to print strings */
+static Tcl_Obj *toglFont;
+static double xAngle = 0, yAngle = 0, zAngle = 0;
+static GLdouble CornerX, CornerY, CornerZ;      /* where to print strings */
 
 
 /* 
@@ -29,15 +26,27 @@ static GLfloat CornerX, CornerY, CornerZ;       /* where to print strings */
  * been realized.  Here's where one may do some one-time context setup or
  * initializations.
  */
-void
-create_cb(Togl *togl)
+static int
+create_cb(ClientData clientData, Tcl_Interp *interp, int objc,
+        Tcl_Obj *const *objv)
 {
+    Togl   *togl;
 
-    FontBase = Togl_LoadBitmapFont(togl, TOGL_BITMAP_8_BY_13);
-    if (!FontBase) {
-        printf("Couldn't load font!\n");
-        exit(1);
+    if (objc != 2) {
+        Tcl_WrongNumArgs(interp, 1, objv, "pathName");
+        return TCL_ERROR;
     }
+
+    if (Togl_GetToglFromObj(interp, objv[1], &togl) != TCL_OK) {
+        return TCL_ERROR;
+    }
+
+    toglFont = Togl_LoadBitmapFont(togl, "Helvetica");
+    if (!toglFont) {
+        Tcl_AppendResult(interp, "create_cb: ", "Couldn't load font!\n", NULL);
+        return TCL_ERROR;
+    }
+    return TCL_OK;
 }
 
 
@@ -46,34 +55,51 @@ create_cb(Togl *togl)
  * has been resized.  Typically, we call glViewport and perhaps setup the
  * projection matrix.
  */
-void
-reshape_cb(Togl *togl)
+static int
+reshape_cb(ClientData clientData, Tcl_Interp *interp, int objc,
+        Tcl_Obj *const *objv)
 {
-    int     width = Togl_Width(togl);
-    int     height = Togl_Height(togl);
-    float   aspect = (float) width / (float) height;
+    int     width;
+    int     height;
+    double  aspect;
+    Togl   *togl;
+
+    if (objc != 2) {
+        Tcl_WrongNumArgs(interp, 1, objv, "pathName");
+        return TCL_ERROR;
+    }
+
+    if (Togl_GetToglFromObj(interp, objv[1], &togl) != TCL_OK) {
+        return TCL_ERROR;
+    }
+
+    width = Togl_Width(togl);
+    height = Togl_Height(togl);
+    aspect = (double) width / (double) height;
 
     glViewport(0, 0, width, height);
 
     /* Set up projection transform */
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glFrustum(-aspect, aspect, -1.0, 1.0, 1.0, 10.0);
+    glFrustum(-aspect, aspect, -1, 1, 1, 10);
 
     CornerX = -aspect;
-    CornerY = -1.0;
+    CornerY = -1;
     CornerZ = -1.1;
 
     /* Change back to model view transform for rendering */
     glMatrixMode(GL_MODELVIEW);
+
+    return TCL_OK;
 }
 
 
 
 static void
-print_string(const char *s)
+print_string(Togl *togl, const char *s)
 {
-    glCallLists(strlen(s), GL_UNSIGNED_BYTE, s);
+    Togl_WriteChars(togl, toglFont, s, 0);
 }
 
 
@@ -82,20 +108,30 @@ print_string(const char *s)
  * contents have to be redrawn.  Typically, we clear the color and depth
  * buffers, render our objects, then swap the front/back color buffers.
  */
-void
-display_cb(Togl *togl)
+static int
+display_cb(ClientData clientData, Tcl_Interp *interp, int objc,
+        Tcl_Obj *const *objv)
 {
     static GLuint cubeList = 0;
     const char *ident;
+    Togl   *togl;
+
+    if (objc != 2) {
+        Tcl_WrongNumArgs(interp, 1, objv, "pathName");
+        return TCL_ERROR;
+    }
+
+    if (Togl_GetToglFromObj(interp, objv[1], &togl) != TCL_OK)
+        return TCL_ERROR;
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glLoadIdentity();           /* Reset modelview matrix to the identity
                                  * matrix */
-    glTranslatef(0.0, 0.0, -3.0);       /* Move the camera back three units */
-    glRotatef(xAngle, 1.0, 0.0, 0.0);   /* Rotate by X, Y, and Z angles */
-    glRotatef(yAngle, 0.0, 1.0, 0.0);
-    glRotatef(zAngle, 0.0, 0.0, 1.0);
+    glTranslatef(0, 0, -3);     /* Move the camera back three units */
+    glRotated(xAngle, 1, 0, 0); /* Rotate by X, Y, and Z angles */
+    glRotated(yAngle, 0, 1, 0);
+    glRotated(zAngle, 0, 0, 1);
 
     glEnable(GL_DEPTH_TEST);
 
@@ -105,29 +141,29 @@ display_cb(Togl *togl)
 
         /* Front face */
         glBegin(GL_QUADS);
-        glColor3f(0.0, 0.7, 0.1);       /* Green */
-        glVertex3f(-1.0, 1.0, 1.0);
-        glVertex3f(1.0, 1.0, 1.0);
-        glVertex3f(1.0, -1.0, 1.0);
-        glVertex3f(-1.0, -1.0, 1.0);
+        glColor3f(0, 0.7f, 0.1f);       /* Green */
+        glVertex3f(-1, 1, 1);
+        glVertex3f(1, 1, 1);
+        glVertex3f(1, -1, 1);
+        glVertex3f(-1, -1, 1);
         /* Back face */
-        glColor3f(0.9, 1.0, 0.0);       /* Yellow */
-        glVertex3f(-1.0, 1.0, -1.0);
-        glVertex3f(1.0, 1.0, -1.0);
-        glVertex3f(1.0, -1.0, -1.0);
-        glVertex3f(-1.0, -1.0, -1.0);
+        glColor3f(0.9f, 1, 0);  /* Yellow */
+        glVertex3f(-1, 1, -1);
+        glVertex3f(1, 1, -1);
+        glVertex3f(1, -1, -1);
+        glVertex3f(-1, -1, -1);
         /* Top side face */
-        glColor3f(0.2, 0.2, 1.0);       /* Blue */
-        glVertex3f(-1.0, 1.0, 1.0);
-        glVertex3f(1.0, 1.0, 1.0);
-        glVertex3f(1.0, 1.0, -1.0);
-        glVertex3f(-1.0, 1.0, -1.0);
+        glColor3f(0.2f, 0.2f, 1);       /* Blue */
+        glVertex3f(-1, 1, 1);
+        glVertex3f(1, 1, 1);
+        glVertex3f(1, 1, -1);
+        glVertex3f(-1, 1, -1);
         /* Bottom side face */
-        glColor3f(0.7, 0.0, 0.1);       /* Red */
-        glVertex3f(-1.0, -1.0, 1.0);
-        glVertex3f(1.0, -1.0, 1.0);
-        glVertex3f(1.0, -1.0, -1.0);
-        glVertex3f(-1.0, -1.0, -1.0);
+        glColor3f(0.7f, 0, 0.1f);       /* Red */
+        glVertex3f(-1, -1, 1);
+        glVertex3f(1, -1, 1);
+        glVertex3f(1, -1, -1);
+        glVertex3f(-1, -1, -1);
         glEnd();
 
         glEndList();
@@ -137,42 +173,46 @@ display_cb(Togl *togl)
 
     glDisable(GL_DEPTH_TEST);
     glLoadIdentity();
-    glColor3f(1.0, 1.0, 1.0);
-    glRasterPos3f(CornerX, CornerY, CornerZ);
-    glListBase(FontBase);
+    glColor3f(1, 1, 1);
+    glRasterPos3d(CornerX, CornerY, CornerZ);
     ident = Togl_Ident(togl);
     if (strcmp(ident, "Single") == 0) {
-        print_string("Single buffered");
+        print_string(togl, "Single buffered");
     } else {
-        print_string("Double buffered");
+        print_string(togl, "Double buffered");
     }
     Togl_SwapBuffers(togl);
+    return TCL_OK;
 }
 
 
 
 
-int
-setXrot_cb(Togl *togl, int argc, CONST84 char *argv[])
+static int
+setXrot_cb(ClientData clientData, Tcl_Interp *interp, int objc,
+        Tcl_Obj *const *objv)
 {
-    Tcl_Interp *interp = Togl_Interp(togl);
+    Togl   *togl;
 
-    /* error checking */
-    if (argc != 3) {
-        Tcl_SetResult(interp,
-                "wrong # args: should be \"pathName setXrot ?angle?\"",
-                TCL_STATIC);
+    if (objc != 3) {
+        Tcl_WrongNumArgs(interp, 1, objv, "pathName angle");
         return TCL_ERROR;
     }
 
-    xAngle = atof(argv[2]);
+    if (Togl_GetToglFromObj(interp, objv[1], &togl) != TCL_OK) {
+        return TCL_ERROR;
+    }
+
+    if (Tcl_GetDoubleFromObj(interp, objv[2], &xAngle) != TCL_OK) {
+        return TCL_ERROR;
+    }
 
     /* printf( "before %f ", xAngle ); */
 
-    if (xAngle < 0.0) {
-        xAngle += 360.0;
-    } else if (xAngle > 360.0) {
-        xAngle -= 360.0;
+    if (xAngle < 0) {
+        xAngle += 360;
+    } else if (xAngle > 360) {
+        xAngle -= 360;
     }
 
     /* printf( "after %f \n", xAngle ); */
@@ -180,101 +220,94 @@ setXrot_cb(Togl *togl, int argc, CONST84 char *argv[])
     Togl_PostRedisplay(togl);
 
     /* Let result string equal value */
-    strcpy(interp->result, argv[2]);
+    Tcl_SetObjResult(interp, objv[2]);
     return TCL_OK;
 }
 
 
-
-int
-setYrot_cb(Togl *togl, int argc, CONST84 char *argv[])
+static int
+setYrot_cb(ClientData clientData, Tcl_Interp *interp, int objc,
+        Tcl_Obj *const *objv)
 {
-    Tcl_Interp *interp = Togl_Interp(togl);
+    Togl   *togl;
 
-    /* error checking */
-    if (argc != 3) {
-        Tcl_SetResult(interp,
-                "wrong # args: should be \"pathName setYrot ?angle?\"",
-                TCL_STATIC);
+    if (objc != 3) {
+        Tcl_WrongNumArgs(interp, 1, objv, "pathName angle");
         return TCL_ERROR;
     }
 
-    yAngle = atof(argv[2]);
+    if (Togl_GetToglFromObj(interp, objv[1], &togl) != TCL_OK) {
+        return TCL_ERROR;
+    }
 
-    if (yAngle < 0.0) {
-        yAngle += 360.0;
-    } else if (yAngle > 360.0) {
-        yAngle -= 360.0;
+    if (Tcl_GetDoubleFromObj(interp, objv[2], &yAngle) != TCL_OK) {
+        return TCL_ERROR;
+    }
+
+    if (yAngle < 0) {
+        yAngle += 360;
+    } else if (yAngle > 360) {
+        yAngle -= 360;
     }
 
     Togl_PostRedisplay(togl);
 
     /* Let result string equal value */
-    strcpy(interp->result, argv[2]);
+    Tcl_SetObjResult(interp, objv[2]);
     return TCL_OK;
 }
 
-int
-getXrot_cb(ClientData clientData, Tcl_Interp *interp, int argc, char *argv[])
+static int
+getXrot_cb(ClientData clientData, Tcl_Interp *interp, int argc,
+        CONST84 char *argv[])
 {
-    sprintf(interp->result, "%d", (int) xAngle);
+    Tcl_SetObjResult(interp, Tcl_NewDoubleObj(xAngle));
     return TCL_OK;
 }
 
-int
-getYrot_cb(ClientData clientData, Tcl_Interp *interp, int argc, char *argv[])
+static int
+getYrot_cb(ClientData clientData, Tcl_Interp *interp, int argc,
+        CONST84 char *argv[])
 {
-    sprintf(interp->result, "%d", (int) yAngle);
+    Tcl_SetObjResult(interp, Tcl_NewDoubleObj(yAngle));
     return TCL_OK;
 }
 
 /* 
- * Called by Tk_Main() to let me initialize the modules (Togl) I will need.
+ * Called by Tcl to let me initialize the modules (Togl) I will need.
  */
-TOGL_EXTERN int
+EXTERN int
 Double_Init(Tcl_Interp *interp)
 {
-#ifdef USE_TCL_STUBS
-    if (Tcl_InitStubs(interp, "8.1", 0) == NULL) {
+    /* 
+     * Initialize Tcl and the Togl widget module.
+     */
+    if (Tcl_InitStubs(interp, "8.1", 0) == NULL
+            || Togl_InitStubs(interp, "2.0", 0) == NULL) {
         return TCL_ERROR;
     }
-#endif
-#ifdef USE_TK_STUBS
-    if (Tk_InitStubs(interp, "8.1", 0) == NULL) {
-        return TCL_ERROR;
-    }
-#endif
-
-    if (Togl_Init(interp) == TCL_ERROR) {
-        return TCL_ERROR;
-    }
-#ifdef macintosh
-    Togl_MacSetupMainInterp(interp);
-#endif
 
     /* 
      * Specify the C callback functions for widget creation, display,
      * and reshape.
      */
-    Togl_CreateFunc(create_cb);
-    Togl_DisplayFunc(display_cb);
-    Togl_ReshapeFunc(reshape_cb);
+    Tcl_CreateObjCommand(interp, "create_cb", create_cb, NULL, NULL);
+    Tcl_CreateObjCommand(interp, "display_cb", display_cb, NULL, NULL);
+    Tcl_CreateObjCommand(interp, "reshape_cb", reshape_cb, NULL, NULL);
 
     /* 
      * Make a new Togl widget command so the Tcl code can set a C variable.
      */
 
-    Togl_CreateCommand("setXrot", setXrot_cb);
-    Togl_CreateCommand("setYrot", setYrot_cb);
+    Tcl_CreateObjCommand(interp, "setXrot", setXrot_cb, NULL, NULL);
+    Tcl_CreateObjCommand(interp, "setYrot", setYrot_cb, NULL, NULL);
 
     /* 
      * Call Tcl_CreateCommand for application-specific commands, if
      * they weren't already created by the init procedures called above.
      */
 
-    Tcl_CreateCommand(interp, "getXrot", (Tcl_CmdProc *) getXrot_cb,
-            (ClientData) NULL, (Tcl_CmdDeleteProc *) NULL);
-    Tcl_CreateCommand(interp, "getYrot", (Tcl_CmdProc *) getYrot_cb,
-            (ClientData) NULL, (Tcl_CmdDeleteProc *) NULL);
+    Tcl_CreateCommand(interp, "getXrot", getXrot_cb, NULL, NULL);
+    Tcl_CreateCommand(interp, "getYrot", getYrot_cb, NULL, NULL);
     return TCL_OK;
 }
