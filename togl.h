@@ -49,6 +49,7 @@
 #    include <OpenGL/gl.h>
 #  elif defined(TOGL_NSOPENGL)
 #    include <OpenGL/OpenGL.h>
+#    include <GL/gl.h>
 #  else
 #    include <GL/gl.h>
 #  endif
