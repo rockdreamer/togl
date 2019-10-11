@@ -341,7 +341,7 @@ struct Togl_PackageGlobals
 };
 typedef struct Togl_PackageGlobals Togl_PackageGlobals;
 
-extern ToglStubs toglStubs;     /* should be only non-const global */
+extern const ToglStubs toglStubs;     /* should be only non-const global */
 
 #if defined(TOGL_NSOPENGL)
 
