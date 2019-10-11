@@ -4800,6 +4800,8 @@ Togl_NumEyes(const Togl *togl)
 void
 Togl_DrawBuffer(Togl *togl, GLenum mode)
 {
+    int w,h;
+
     if (togl->Stereo <= TOGL_STEREO_ONE_EYE_MAX) {
         /* Only drawing a single eye */
         if (togl->currentStereoBuffer != STEREO_BUFFER_NONE) {
@@ -4863,7 +4865,9 @@ Togl_DrawBuffer(Togl *togl, GLenum mode)
               break;
         }
     }
-    int w = togl->Width*togl->PixelScale, h = togl->Height*togl->PixelScale;
+    w = togl->Width*togl->PixelScale;
+    h = togl->Height*togl->PixelScale;
+    
     switch (togl->Stereo) {
       default:
           break;
