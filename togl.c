@@ -80,11 +80,13 @@
 #  define GLX_GLXEXT_LEGACY     /* include glxext.h separately */
 #  include <GL/glx.h>
    /* we want the prototype typedefs from glxext.h */
+#if 0
 #  undef GLX_VERSION_1_3
 #  undef GLX_VERSION_1_4
 #  ifdef UNDEF_GET_PROC_ADDRESS
 #    undef GLX_ARB_get_proc_address
 #  endif
+#endif
 #  include <GL/glxext.h>
 #  ifdef __sgi
 #    include <X11/extensions/SGIStereo.h>
