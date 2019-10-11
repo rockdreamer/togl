@@ -12,6 +12,17 @@
  * See the LICENSE file for copyright details.
  */
 
+#if PY_MAJOR_VERSION >= 3
+# define ADDR_CHECK(x) PyLong_Check(x)
+# define CVT_TO_ADDR(x) PyLong_AsVoidPtr(x)
+#elif PY_MAJOR_VERSION == 2 && PY_MINOR_VERSION == 7 && PY_MICRO_VERSION >= 6
+# define ADDR_CHECK(x) (PyLong_Check(x) || PyInt_Check(x))
+# define CVT_TO_ADDR(x) PyLong_AsVoidPtr(x)
+#else
+# define ADDR_CHECK(x) PyInt_Check(x)
+# define CVT_TO_ADDR(x) PyInt_AsLong(x)
+#endif
+
 Togl   *
 getToglFromWidget(PyObject *widget)
 {
@@ -39,7 +50,7 @@ getToglFromWidget(PyObject *widget)
     }
 
     interpAddr = PyEval_CallMethod(tk, "interpaddr", "()");
-    if (interpAddr == NULL || !PyInt_Check(interpAddr)) {
+    if (interpAddr == NULL || !ADDR_CHECK(interpAddr)) {
         Py_DECREF(cmdNameObj);
         Py_DECREF(tk);
         Py_XDECREF(interpAddr);
@@ -51,7 +62,7 @@ getToglFromWidget(PyObject *widget)
     }
 
     cmdName = PyString_AsString(cmdNameObj);
-    interp = (Tcl_Interp *) PyInt_AsLong(interpAddr);
+    interp = (Tcl_Interp *) CVT_TO_ADDR(interpAddr);
 
 #ifdef USE_TOGL_STUBS
     if (!didOnce) {
