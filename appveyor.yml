@@ -24,20 +24,7 @@ install:
 
 build_script: |-
     %CMD_IN_ENV% "C:\Users\appveyor\AppData\Local\Programs\Common\Microsoft\Visual C++ for Python\9.0\vcvarsall.bat" %VCVARSALL_PLATFORM%
-
-    mkdir dist
-    mkdir build
-    cd build
-    cmake --version
-    %CMD_IN_ENV% cmake .. ^
-      -DCMAKE_BUILD_TYPE=Release ^
-      "-DCMAKE_C_COMPILER=C:/Users/appveyor/AppData/Local/Programs/Common/Microsoft/Visual C++ for Python/9.0/VC/bin/%VCVARSALL_PLATFORM%/cl.exe" ^
-      "-DCMAKE_C_COMPILER=C:/Users/appveyor/AppData/Local/Programs/Common/Microsoft/Visual C++ for Python/9.0/VC/bin/%VCVARSALL_PLATFORM%/cl.exe" ^
-      "-DCMAKE_LINKER=C:/Users/appveyor/AppData/Local/Programs/Common/Microsoft/Visual C++ for Python/9.0/VC/bin/%VCVARSALL_PLATFORM%/link.exe" ^
-      -DCMAKE_INSTALL_PREFIX=..\dist ^
-      -G Ninja
-    %CMD_IN_ENV% cmake --build .
-    cmake --build --target install .
+    %CMD_IN_ENV% .\.ci\build.cmd
 
 artifacts:
   - path: dist\*
