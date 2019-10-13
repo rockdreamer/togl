@@ -26,4 +26,4 @@ build_script: |-
     %CMD_IN_ENV% .\.ci\build.cmd
 
 artifacts:
-  - path: "C:\\projects\\togl\\dist\\*"
+  - path: dist\**\*
