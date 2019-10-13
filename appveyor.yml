@@ -1,0 +1,23 @@
+version: '{build}'
+
+environment:
+  matrix:
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
+      PYTHON: "C:\\Python27"
+      VCVARSALL_PLATFORM: x86
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
+      PYTHON: "C:\\Python27-x64"
+      VCVARSALL_PLATFORM: amd64
+
+build_script: |-
+    call "C:\Program Files (x86)\Microsoft\Visual C++ for Python\9.0\vcvarsall.bat" %VCVARSALL_PLATFORM%
+    mkdir dist
+    mkdir build
+    cd build
+    cmake --version
+    cmake .. -DCMAKE_INSTALL_PREFIX=..\dist -G Ninja
+    cmake --build .
+    cmake --build --target install .
+
+artifacts:
+  - path: dist\*
