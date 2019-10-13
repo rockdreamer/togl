@@ -8,4 +8,4 @@ cmake .. ^
     -DCMAKE_INSTALL_PREFIX=..\dist ^
     -G Ninja
 cmake --build .
-cmake --build --target install .
+cmake --build . --target install
