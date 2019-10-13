@@ -23,7 +23,7 @@ install:
   - cinst ninja
 
 build_script: |-
-    "%CMD_IN_ENV% C:\Users\appveyor\AppData\Local\Programs\Common\Microsoft\Visual C++ for Python\9.0\vcvarsall.bat" %VCVARSALL_PLATFORM%
+    %CMD_IN_ENV% "C:\Users\appveyor\AppData\Local\Programs\Common\Microsoft\Visual C++ for Python\9.0\vcvarsall.bat" %VCVARSALL_PLATFORM%
 
     mkdir dist
     mkdir build
