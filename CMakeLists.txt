@@ -1,14 +1,12 @@
 cmake_minimum_required(VERSION 3.10)
 
-# Requires
-# https://download.microsoft.com/download/7/9/6/796EF2E4-801B-4FC4-AB28-B59FBF6D907B/VCForPython27.msi
-
 project(Togl)
 set(PACKAGE_NAME Togl)
 set(PACKAGE_VERSION 2.2)
 set(PACKAGE_POSTFIX_VERSION 22)
 
 find_package(OpenGL)
+find_package(Python2)
 
 set(TOGL_HEADERS
     image.h
@@ -29,23 +27,17 @@ if(WIN32)
     endif()
     include(FetchContent)
     FetchContent_Declare(
-        python27wintcl
-        GIT_REPOSITORY    https://github.com/python/cpython-bin-deps
-        GIT_TAG           origin/tcltk-8.6.6.0
+        tcl_core
+        GIT_REPOSITORY    https://github.com/tcltk/tcl
+        GIT_TAG           core-8-5-branch
     )
-    FetchContent_Populate(python27wintcl)
+    FetchContent_Populate(tcl_core)
     FetchContent_Declare(
-        tclsource
-        GIT_REPOSITORY    https://github.com/python/cpython-source-deps/
-        GIT_TAG           origin/tcl
+        tk_core
+        GIT_REPOSITORY    https://github.com/tcltk/tk
+        GIT_TAG           core-8-5-branch
     )
-    FetchContent_Populate(tclsource)
-    FetchContent_Declare(
-        tksource
-        GIT_REPOSITORY    https://github.com/python/cpython-source-deps/
-        GIT_TAG           origin/tk
-    )
-    FetchContent_Populate(tksource)
+    FetchContent_Populate(tk_core)
 endif()
 
 configure_file(togl_ws.h.in togl_ws.h @ONLY)
@@ -77,24 +69,24 @@ target_include_directories(stublibrary PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_dependencies(Togl OpenGL::GL)
 
 if(WIN32)
-    if( CMAKE_SIZEOF_VOID_P EQUAL 8 )
-    target_include_directories(Togl PRIVATE "${python27wintcl_SOURCE_DIR}/amd64/include")
-    target_link_directories(Togl PRIVATE "${python27wintcl_SOURCE_DIR}/amd64/lib")
-    target_include_directories(stublibrary PRIVATE "${python27wintcl_SOURCE_DIR}/amd64/include")
-    target_link_directories(stublibrary PRIVATE "${python27wintcl_SOURCE_DIR}/amd64/lib")
-    else()
-        target_include_directories(Togl PRIVATE "${python27wintcl_SOURCE_DIR}/win32/include")
-        target_link_directories(Togl PRIVATE "${python27wintcl_SOURCE_DIR}/win32/lib")
-        target_include_directories(stublibrary PRIVATE "${python27wintcl_SOURCE_DIR}/win32/include")
-        target_link_directories(stublibrary PRIVATE "${python27wintcl_SOURCE_DIR}/win32/lib")
-    endif()
-    target_link_libraries(Togl PRIVATE tclstub86)
-    target_link_libraries(Togl PRIVATE tkstub86)
+    get_filename_component(Python2_ROOT_DIR ${Python2_EXECUTABLE} DIRECTORY)
+    target_link_directories(Togl PRIVATE "${Python2_ROOT_DIR}/tcl")
+    target_link_libraries(Togl PRIVATE tclstub85)
+    target_link_libraries(Togl PRIVATE tkstub85)
     target_link_libraries(Togl PRIVATE Opengl32)
-    target_include_directories(Togl PRIVATE "${tksource_SOURCE_DIR}/generic")
-    target_include_directories(Togl PRIVATE "${tksource_SOURCE_DIR}/win")
-    target_include_directories(Togl PRIVATE "${tclsource_SOURCE_DIR}/generic")
-    target_include_directories(Togl PRIVATE "${tclsource_SOURCE_DIR}/win")
+
+    target_include_directories(Togl PRIVATE "${tcl_core_SOURCE_DIR}/win")
+    target_include_directories(Togl PRIVATE "${tcl_core_SOURCE_DIR}/generic")
+    target_include_directories(Togl PRIVATE "${tk_core_SOURCE_DIR}/win")
+    target_include_directories(Togl PRIVATE "${tk_core_SOURCE_DIR}/generic")
+    target_include_directories(Togl PRIVATE "${tk_core_SOURCE_DIR}/xlib")
+
+    target_include_directories(stublibrary PRIVATE "${tcl_core_SOURCE_DIR}/win")
+    target_include_directories(stublibrary PRIVATE "${tcl_core_SOURCE_DIR}/generic")
+    target_include_directories(stublibrary PRIVATE "${tk_core_SOURCE_DIR}/win")
+    target_include_directories(stublibrary PRIVATE "${tk_core_SOURCE_DIR}/generic")
+    target_include_directories(stublibrary PRIVATE "${tk_core_SOURCE_DIR}/xlib")
+
     install(TARGETS Togl
         RUNTIME DESTINATION lib/${PACKAGE_NAME}${PACKAGE_VERSION}
         ARCHIVE DESTINATION lib/${PACKAGE_NAME}${PACKAGE_VERSION})
