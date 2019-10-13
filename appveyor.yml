@@ -1,7 +1,7 @@
 version: '{build}'
 
 environment:
-  - WIN_SDK_ROOT: "C:\\Program Files\\Microsoft SDKs\\Windows"
+  WIN_SDK_ROOT: "C:\\Program Files\\Microsoft SDKs\\Windows"
   matrix:
     - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
       PYTHON: "C:\\Python27"
