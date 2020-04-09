@@ -517,10 +517,10 @@ install-lib-binaries: binaries
 	    echo " Install pkgIndex.tcl $(DESTDIR)$(pkglibdir)"; \
 	    $(INSTALL_DATA) pkgIndex.tcl $(DESTDIR)$(pkglibdir); \
 	    echo " Install LICENSE $(DESTDIR)$(pkglibdir)"; \
-	    $(INSTALL_DATA) LICENSE $(DESTDIR)$(pkglibdir); \
+	    $(INSTALL_DATA) $(srcdir)/LICENSE $(DESTDIR)$(pkglibdir); \
 	else \
 	    echo " Install LICENSE.togl $(DESTDIR)$(libdir)"; \
-	    $(INSTALL_DATA) LICENSE $(DESTDIR)$(libdir)/LICENSE.togl; \
+	    $(INSTALL_DATA) $(srcdir)/LICENSE $(DESTDIR)$(libdir)/LICENSE.togl; \
 	fi
 
 #========================================================================
