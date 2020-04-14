@@ -163,8 +163,9 @@ AC_PATH_PROG([AUTOSTEREOD], [autostereod], [],
 # Choose OpenGL platform
 case "${TEA_WINDOWINGSYSTEM}" in
 	aqua)
-		AC_SUBST(TOGL_WINDOWINGSYSTEM,TOGL_AGL)
-		TEA_ADD_LIBS([-framework AGL -framework OpenGL -framework ApplicationServices])
+		AC_SUBST(TOGL_WINDOWINGSYSTEM,TOGL_NSOPENGL)
+		TEA_ADD_LIBS([-framework OpenGL -framework AppKit -framework ApplicationServices])
+		CFLAGS="-ObjC"
 		# libGLU is implicit in OpenGL framework
 		LIBGLU=
 		;;

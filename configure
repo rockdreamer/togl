@@ -5921,10 +5921,10 @@ fi
 # Choose OpenGL platform
 case "${TEA_WINDOWINGSYSTEM}" in
 	aqua)
-		TOGL_WINDOWINGSYSTEM=TOGL_AGL
+		TOGL_WINDOWINGSYSTEM=TOGL_NSOPENGL
 
 
-    vars="-framework AGL -framework OpenGL -framework ApplicationServices"
+    vars="-framework OpenGL -framework AppKit -framework ApplicationServices"
     for i in $vars; do
 	if test "${TEA_PLATFORM}" = "windows" -a "$GCC" = "yes" ; then
 	    # Convert foo.lib to -lfoo for GCC.  No-op if not *.lib
@@ -5934,6 +5934,7 @@ case "${TEA_WINDOWINGSYSTEM}" in
     done
 
 
+		CFLAGS="-ObjC"
 		# libGLU is implicit in OpenGL framework
 		LIBGLU=
 		;;
